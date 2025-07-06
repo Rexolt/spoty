@@ -7,11 +7,14 @@
   <title>Linux Spotlight</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <div id="overlay">
-    <input id="search" type="text" placeholder="Search..." autocomplete="off">
-    <div id="results"></div>
-  </div>
-  <script src="renderer.js"></script>
-</body>
+  <body>
+    <div id="overlay">
+      <label id="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input id="search" type="text" placeholder="What to search, obviously?" autocomplete="off">
+      </label>
+      <div id="results"></div>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
 </html>
