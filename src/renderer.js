@@ -103,12 +103,15 @@ searchInput.addEventListener('input', () => {
       resultsDiv.appendChild(el);
     });
   }
+
   adjustHeight();
+
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     ipcRenderer.send('hide-window');
+
   } else if (e.key === 'Enter') {
     const first = resultsDiv.querySelector('.result-item');
     if (first) first.click();
@@ -116,6 +119,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
+
   searchInput.focus();
   adjustHeight();
 });
@@ -130,3 +134,4 @@ ipcRenderer.on('reset-search', () => {
   resultsDiv.innerHTML = '';
   adjustHeight();
 });
+
