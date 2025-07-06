@@ -1,0 +1,27 @@
+{
+  "name": "linux-spotlight",
+  "version": "1.0.0",
+  "description": "Modern Spotlight-like search app for Linux",
+  "main": "main.js",
+  "scripts": {
+    
+    "start": "LIBVA_DRIVER_NAME=nvidia electron . --disable-gpu",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.example.linuxspotlight",
+    "productName": "Linux Spotlight",
+    "files": ["main.js", "preload.js", "src/**/*"],
+    "linux": {
+      "target": ["AppImage", "deb", "rpm"]
+    }
+  },
+  "dependencies": {
+    "fuse.js": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^23.0.0"
+  }
+}
