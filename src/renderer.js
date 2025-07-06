@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-
 function findIconPath(iconName) {
   if (!iconName) return null;
   const iconDirs = [
@@ -60,7 +59,6 @@ function loadApplications() {
 const appItems = loadApplications();
 const data = appItems;
 
-
 const fuse = new Fuse(data, { keys: ['name'], threshold: 0.3 });
 
 const searchInput = document.getElementById('search');
@@ -105,13 +103,11 @@ searchInput.addEventListener('input', () => {
   }
 
   adjustHeight();
-
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     ipcRenderer.send('hide-window');
-
   } else if (e.key === 'Enter') {
     const first = resultsDiv.querySelector('.result-item');
     if (first) first.click();
@@ -119,7 +115,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-
   searchInput.focus();
   adjustHeight();
 });
@@ -134,4 +129,3 @@ ipcRenderer.on('reset-search', () => {
   resultsDiv.innerHTML = '';
   adjustHeight();
 });
-
