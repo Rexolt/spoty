@@ -4,9 +4,10 @@ const { exec } = require('child_process');
 
 let win;
 function createWindow() {
+  const baseHeight = 60;
   win = new BrowserWindow({
     width: 600,
-    height: 150,
+    height: baseHeight,
     frame: false,
     transparent: false,
     backgroundColor: '#1e1e1ecc',
@@ -19,14 +20,10 @@ function createWindow() {
 
       contextIsolation: false,
 
-
-
-     
-
-
       nodeIntegration: true
     }
   });
+  win.baseHeight = baseHeight;
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
   win.once('ready-to-show', () => {
@@ -66,9 +63,10 @@ app.whenReady().then(() => {
     }
   });
 
-
+  
   if (!registered) console.error('Super+Space registration failed');
 
+  
   ipcMain.on('launch-item', (_, itemPath) => {
     if (itemPath.endsWith('.desktop')) {
       const cmd = `gtk-launch ${path.basename(itemPath, '.desktop')}`;
@@ -78,11 +76,20 @@ app.whenReady().then(() => {
     }
   });
 
-
+  
   ipcMain.on('hide-window', () => {
     if (win) win.hide();
   });
-});
+
+  
+  ipcMain.on('adjust-height', (_, height) => {
+    if (win) {
+      const [width] = win.getSize();
+      win.setSize(width, Math.max(win.baseHeight, height));
+    }
+  });
+
+
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
