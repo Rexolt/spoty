@@ -76,7 +76,9 @@ searchInput.addEventListener('input', () => {
       resultsDiv.appendChild(el);
     });
   }
+
   adjustHeight();
+
 });
 
 document.addEventListener('keydown', (e) => {
@@ -85,6 +87,8 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+
 window.addEventListener('DOMContentLoaded', () => {
   adjustHeight();
 });
+

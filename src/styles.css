@@ -17,6 +17,8 @@ body {
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
   border: 2px solid transparent;
   animation: rgb 4s linear infinite;
+}
+
 
   display: flex;
   flex-direction: column;
@@ -34,6 +36,7 @@ body {
   background: #333;
   color: #eee;
   outline: none;
+
   -webkit-app-region: no-drag;
 }
 
@@ -55,8 +58,10 @@ body {
   display: flex;
   flex-direction: column;
   -webkit-app-region: no-drag;
+
   max-height: 300px;
   overflow-y: auto;
+
 }
 
 .result-item {
