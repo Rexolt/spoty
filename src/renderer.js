@@ -5,20 +5,33 @@ const path = require('path');
 const os = require('os');
 
 
-function walkDir(dir, fileList = []) {
-  if (!fs.existsSync(dir)) return fileList;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkDir(fullPath, fileList);
-    } else {
-      fileList.push({ name: entry.name, path: fullPath });
+function findIconPath(iconName) {
+  if (!iconName) return null;
+  const iconDirs = [
+    '/usr/share/icons/hicolor/48x48/apps',
+    '/usr/share/icons/hicolor/256x256/apps',
+    '/usr/share/icons/hicolor/64x64/apps',
+    '/usr/share/pixmaps',
+    '/usr/share/icons/hicolor/scalable/apps'
+  ];
+  const exts = ['png', 'svg', 'xpm', 'jpg'];
+
+  if (path.isAbsolute(iconName)) {
+    if (fs.existsSync(iconName)) return iconName;
+    for (const ext of exts) {
+      const p = `${iconName}.${ext}`;
+      if (fs.existsSync(p)) return p;
     }
   }
-  return fileList;
-}
 
+  for (const dir of iconDirs) {
+    for (const ext of exts) {
+      const full = path.join(dir, `${iconName}.${ext}`);
+      if (fs.existsSync(full)) return full;
+    }
+  }
+  return null;
+}
 
 function loadApplications() {
   const appsDirs = [
@@ -29,12 +42,14 @@ function loadApplications() {
   appsDirs.forEach(dir => {
     if (!fs.existsSync(dir)) return;
     fs.readdirSync(dir).forEach(file => {
-      if (file.endsWith('.desktop')) {
-        const content = fs.readFileSync(path.join(dir, file), 'utf-8');
-        const match = content.match(/^Name=(.+)$/m);
-        if (match) {
-          apps.push({ name: match[1], path: path.join(dir, file) });
-        }
+      if (!file.endsWith('.desktop')) return;
+      const full = path.join(dir, file);
+      const content = fs.readFileSync(full, 'utf-8');
+      const nameMatch = content.match(/^Name=(.+)$/m);
+      if (nameMatch) {
+        const iconMatch = content.match(/^Icon=(.+)$/m);
+        const iconPath = iconMatch ? findIconPath(iconMatch[1]) : null;
+        apps.push({ name: nameMatch[1], path: full, icon: iconPath });
       }
     });
   });
@@ -42,31 +57,89 @@ function loadApplications() {
 }
 
 // Prepare data
-const fileItems = walkDir(os.homedir()); 
 const appItems = loadApplications();
-const data = [...appItems, ...fileItems];
+const data = appItems;
 
 
 const fuse = new Fuse(data, { keys: ['name'], threshold: 0.3 });
 
 const searchInput = document.getElementById('search');
 const resultsDiv = document.getElementById('results');
+const baseHeight = 60;
+
+function adjustHeight() {
+  const resultsHeight = resultsDiv.scrollHeight;
+  const total = Math.min(baseHeight + resultsHeight, 350);
+  ipcRenderer.send('adjust-height', total);
+}
+
+function parseWebQuery(q) {
+  const m = q.trim().match(/^web:"(.+)"$/i);
+  return m ? m[1] : null;
+}
 
 searchInput.addEventListener('input', () => {
   const query = searchInput.value;
   if (query) searchInput.classList.add('not-empty');
   else searchInput.classList.remove('not-empty');
+  const web = parseWebQuery(query);
   resultsDiv.innerHTML = '';
-  if (query) {
+  if (!web && query) {
     const results = fuse.search(query).slice(0, 20);
     results.forEach(({ item }) => {
       const el = document.createElement('div');
       el.className = 'result-item';
-      el.textContent = item.name;
+
+      if (item.icon) {
+        const img = document.createElement('img');
+        img.src = `file://${item.icon}`;
+        img.className = 'result-icon';
+        el.appendChild(img);
+      }
+
+      const span = document.createElement('span');
+      span.textContent = item.name;
+      el.appendChild(span);
+
       el.onclick = () => {
         ipcRenderer.send('launch-item', item.path);
+        ipcRenderer.send('hide-window');
       };
+
       resultsDiv.appendChild(el);
     });
   }
+  adjustHeight();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    ipcRenderer.send('hide-window');
+  } else if (e.key === 'Enter') {
+    const web = parseWebQuery(searchInput.value);
+    if (web) {
+      const url = `https://duckduckgo.com/?q=${encodeURIComponent(web)}`;
+      ipcRenderer.send('open-url', url);
+      ipcRenderer.send('hide-window');
+    } else {
+      const first = resultsDiv.querySelector('.result-item');
+      if (first) first.click();
+    }
+  }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  searchInput.focus();
+  adjustHeight();
+});
+
+ipcRenderer.on('focus-search', () => {
+  searchInput.focus();
+});
+
+ipcRenderer.on('reset-search', () => {
+  searchInput.value = '';
+  searchInput.classList.remove('not-empty');
+  resultsDiv.innerHTML = '';
+  adjustHeight();
 });
