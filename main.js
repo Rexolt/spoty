@@ -33,7 +33,10 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-  const toggleWindow = () => {
+  let shortcut = 'Super+Space';
+  let registered = globalShortcut.register(shortcut, toggleWindow);
+
+  function toggleWindow() {
     if (win.isVisible()) {
       win.hide();
       const [width] = win.getSize();
@@ -45,10 +48,7 @@ app.whenReady().then(() => {
       win.focus();
       win.webContents.send('focus-search');
     }
-  };
-
-  let shortcut = 'Super+Space';
-  let registered = globalShortcut.register(shortcut, toggleWindow);
+  }
 
   if (!registered) {
     shortcut = 'CommandOrControl+Space';
