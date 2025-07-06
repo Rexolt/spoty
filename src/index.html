@@ -9,7 +9,12 @@
 </head>
   <body>
     <div id="overlay">
-      <input id="search" type="text" placeholder="Search..." autocomplete="off">
+
+      <label id="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input id="search" type="text" placeholder="What are you looking for?" autocomplete="off">
+      </label>
+
       <div id="results"></div>
     </div>
     <script src="renderer.js"></script>

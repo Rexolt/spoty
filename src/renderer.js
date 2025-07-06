@@ -71,12 +71,18 @@ function adjustHeight() {
   ipcRenderer.send('adjust-height', total);
 }
 
+function parseWebQuery(q) {
+  const m = q.trim().match(/^web:"(.+)"$/i);
+  return m ? m[1] : null;
+}
+
 searchInput.addEventListener('input', () => {
   const query = searchInput.value;
   if (query) searchInput.classList.add('not-empty');
   else searchInput.classList.remove('not-empty');
+  const web = parseWebQuery(query);
   resultsDiv.innerHTML = '';
-  if (query) {
+  if (!web && query) {
     const results = fuse.search(query).slice(0, 20);
     results.forEach(({ item }) => {
       const el = document.createElement('div');
@@ -101,7 +107,6 @@ searchInput.addEventListener('input', () => {
       resultsDiv.appendChild(el);
     });
   }
-
   adjustHeight();
 });
 
@@ -109,8 +114,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     ipcRenderer.send('hide-window');
   } else if (e.key === 'Enter') {
-    const first = resultsDiv.querySelector('.result-item');
-    if (first) first.click();
+    const web = parseWebQuery(searchInput.value);
+    if (web) {
+      const url = `https://duckduckgo.com/?q=${encodeURIComponent(web)}`;
+      ipcRenderer.send('open-url', url);
+      ipcRenderer.send('hide-window');
+    } else {
+      const first = resultsDiv.querySelector('.result-item');
+      if (first) first.click();
+    }
   }
 });
 

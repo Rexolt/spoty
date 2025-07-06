@@ -66,6 +66,10 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('open-url', (_, url) => {
+    shell.openExternal(url);
+  });
+
   ipcMain.on('hide-window', () => {
     if (win) {
       win.hide();
