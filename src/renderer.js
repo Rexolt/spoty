@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-
 function findIconPath(iconName) {
   if (!iconName) return null;
   const iconDirs = [
@@ -60,7 +59,6 @@ function loadApplications() {
 const appItems = loadApplications();
 const data = appItems;
 
-
 const fuse = new Fuse(data, { keys: ['name'], threshold: 0.3 });
 
 const searchInput = document.getElementById('search');
@@ -103,6 +101,7 @@ searchInput.addEventListener('input', () => {
       resultsDiv.appendChild(el);
     });
   }
+
   adjustHeight();
 });
 
