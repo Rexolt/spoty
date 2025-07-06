@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-
 function findIconPath(iconName) {
   if (!iconName) return null;
   const iconDirs = [
@@ -60,12 +59,11 @@ function loadApplications() {
 const appItems = loadApplications();
 const data = appItems;
 
-
 const fuse = new Fuse(data, { keys: ['name'], threshold: 0.3 });
 
 const searchInput = document.getElementById('search');
 const resultsDiv = document.getElementById('results');
-const baseHeight = 70;
+const baseHeight = 60;
 
 function adjustHeight() {
   const resultsHeight = resultsDiv.scrollHeight;
@@ -74,13 +72,8 @@ function adjustHeight() {
 }
 
 function parseWebQuery(q) {
-  const trimmed = q.trim();
-  if (!trimmed.toLowerCase().startsWith('web:')) return null;
-  let query = trimmed.slice(4).trim();
-  if (query.startsWith('"') && query.endsWith('"')) {
-    query = query.slice(1, -1);
-  }
-  return query || null;
+  const m = q.trim().match(/^web:"(.+)"$/i);
+  return m ? m[1] : null;
 }
 
 searchInput.addEventListener('input', () => {
@@ -91,37 +84,28 @@ searchInput.addEventListener('input', () => {
   resultsDiv.innerHTML = '';
   if (!web && query) {
     const results = fuse.search(query).slice(0, 20);
-    if (results.length) {
-      results.forEach(({ item }) => {
-        const el = document.createElement('div');
-        el.className = 'result-item';
+    results.forEach(({ item }) => {
+      const el = document.createElement('div');
+      el.className = 'result-item';
 
-        if (item.icon) {
-          const img = document.createElement('img');
-          img.src = `file://${item.icon}`;
-          img.className = 'result-icon';
-          el.appendChild(img);
-        }
+      if (item.icon) {
+        const img = document.createElement('img');
+        img.src = `file://${item.icon}`;
+        img.className = 'result-icon';
+        el.appendChild(img);
+      }
 
-        const span = document.createElement('span');
-        span.textContent = item.name;
-        el.appendChild(span);
+      const span = document.createElement('span');
+      span.textContent = item.name;
+      el.appendChild(span);
 
-        el.onclick = () => {
-          ipcRenderer.send('launch-item', item.path);
-          ipcRenderer.send('hide-window');
-        };
+      el.onclick = () => {
+        ipcRenderer.send('launch-item', item.path);
+        ipcRenderer.send('hide-window');
+      };
 
-        resultsDiv.appendChild(el);
-      });
-    } else {
-      const msg = document.createElement('div');
-      msg.className = 'no-results';
-      msg.textContent = 'No results found. Try web:' + query;
-      resultsDiv.appendChild(msg);
-    }
-  } else if (!web && !query) {
-    // nothing
+      resultsDiv.appendChild(el);
+    });
   }
   adjustHeight();
 });

@@ -4,7 +4,7 @@ const { exec } = require('child_process');
 
 let win;
 function createWindow() {
-  const baseHeight = 70;
+  const baseHeight = 60;
   win = new BrowserWindow({
     width: 600,
     height: baseHeight,
@@ -33,7 +33,10 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-  const toggleWindow = () => {
+  let shortcut = 'Super+Space';
+  let registered = globalShortcut.register(shortcut, toggleWindow);
+
+  function toggleWindow() {
     if (win.isVisible()) {
       win.hide();
       const [width] = win.getSize();
@@ -45,10 +48,13 @@ app.whenReady().then(() => {
       win.focus();
       win.webContents.send('focus-search');
     }
-  };
+  }
 
-  const shortcut = 'CommandOrControl+Shift+Space';
-  const registered = globalShortcut.register(shortcut, toggleWindow);
+  if (!registered) {
+    shortcut = 'CommandOrControl+Space';
+    registered = globalShortcut.register(shortcut, toggleWindow);
+  }
+
   if (!registered) console.error(`${shortcut} registration failed`);
 
   ipcMain.on('launch-item', (_, itemPath) => {
@@ -84,4 +90,3 @@ app.whenReady().then(() => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
-
