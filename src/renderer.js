@@ -51,6 +51,13 @@ const fuse = new Fuse(data, { keys: ['name'], threshold: 0.3 });
 
 const searchInput = document.getElementById('search');
 const resultsDiv = document.getElementById('results');
+const baseHeight = 60;
+
+function adjustHeight() {
+  const resultsHeight = resultsDiv.scrollHeight;
+  const total = Math.min(baseHeight + resultsHeight, 350);
+  ipcRenderer.send('adjust-height', total);
+}
 
 searchInput.addEventListener('input', () => {
   const query = searchInput.value;
@@ -69,4 +76,15 @@ searchInput.addEventListener('input', () => {
       resultsDiv.appendChild(el);
     });
   }
+  adjustHeight();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    ipcRenderer.send('hide-window');
+  }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  adjustHeight();
 });
