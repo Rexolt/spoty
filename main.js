@@ -16,7 +16,14 @@ function createWindow() {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+
       contextIsolation: false,
+
+
+
+     
+
+
       nodeIntegration: true
     }
   });
@@ -58,6 +65,19 @@ app.whenReady().then(() => {
       shell.openPath(itemPath);
     }
   });
+
+
+  if (!registered) console.error('Super+Space registration failed');
+
+  ipcMain.on('launch-item', (_, itemPath) => {
+    if (itemPath.endsWith('.desktop')) {
+      const cmd = `gtk-launch ${path.basename(itemPath, '.desktop')}`;
+      exec(cmd);
+    } else {
+      shell.openPath(itemPath);
+    }
+  });
+
 
   ipcMain.on('hide-window', () => {
     if (win) win.hide();
