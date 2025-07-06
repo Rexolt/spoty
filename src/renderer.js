@@ -97,6 +97,7 @@ searchInput.addEventListener('input', () => {
 
       el.onclick = () => {
         ipcRenderer.send('launch-item', item.path);
+        ipcRenderer.send('hide-window');
       };
 
       resultsDiv.appendChild(el);
@@ -118,6 +119,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
+
+  searchInput.focus();
+  adjustHeight();
+});
+
+ipcRenderer.on('focus-search', () => {
+  searchInput.focus();
+});
+
+ipcRenderer.on('reset-search', () => {
+  searchInput.value = '';
+  searchInput.classList.remove('not-empty');
+  resultsDiv.innerHTML = '';
   adjustHeight();
 });
 
