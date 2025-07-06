@@ -4,20 +4,22 @@ body {
   padding: 0;
   background: transparent;
   overflow: hidden;
-  font-family: sans-serif;
+
+  font-family: "Segoe UI", "Roboto", sans-serif;
+
 }
 
 #overlay {
   width: 100%;
   height: 100%;
-  background: #2b2b2b;
-  backdrop-filter: blur(6px);
-  border-radius: 8px;
-  padding: 10px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+
+  background: rgba(43, 43, 43, 0.9);
+  backdrop-filter: blur(8px);
+  border-radius: 10px;
+  padding: 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
   border: 2px solid transparent;
   animation: rgb 4s linear infinite;
-}
 
 
   display: flex;
@@ -25,19 +27,25 @@ body {
   align-items: stretch;
   justify-content: center;
   -webkit-app-region: drag;
+ű
+  transition: background 0.2s ease;
+  overflow: hidden;
+ű
 }
 
 #search {
   width: 100%;
-  padding: 12px;
-  font-size: 20px;
+ű
+  padding: 14px;
+  font-size: 22px;
   border: none;
-  border-radius: 4px;
-  background: #333;
-  color: #eee;
+  border-radius: 6px;
+  background: #303030;
+  color: #f5f5f5;
   outline: none;
-
   -webkit-app-region: no-drag;
+  transition: background 0.2s ease;
+ű
 }
 
 #search.not-empty {
@@ -58,21 +66,28 @@ body {
   display: flex;
   flex-direction: column;
   -webkit-app-region: no-drag;
-
+ű
   max-height: 300px;
   overflow-y: auto;
-
+ű
 }
 
 .result-item {
   background: #444;
   margin: 5px 0;
   padding: 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   opacity: 0;
   transform: translateY(-10px);
-  animation: fadeSlide 0.3s forwards;
+
+  animation: fadeSlide 0.25s forwards;
   -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
 }
 
 @keyframes fadeSlide {
@@ -80,6 +95,16 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.result-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.result-item span {
+  flex: 1;
 }
 
 .result-item:hover {

@@ -63,6 +63,7 @@ app.whenReady().then(() => {
     }
   });
 
+
   
   if (!registered) console.error('Super+Space registration failed');
 
@@ -77,17 +78,21 @@ app.whenReady().then(() => {
   });
 
   
+
   ipcMain.on('hide-window', () => {
     if (win) win.hide();
   });
 
-  
+
   ipcMain.on('adjust-height', (_, height) => {
     if (win) {
       const [width] = win.getSize();
       win.setSize(width, Math.max(win.baseHeight, height));
     }
   });
+
+});
+
 
 
 
