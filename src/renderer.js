@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-
 function findIconPath(iconName) {
   if (!iconName) return null;
   const iconDirs = [
@@ -59,7 +58,6 @@ function loadApplications() {
 // Prepare data
 const appItems = loadApplications();
 const data = appItems;
-
 
 const fuse = new Fuse(data, { keys: ['name'], threshold: 0.3 });
 
