@@ -3,14 +3,14 @@ const path = require('path');
 const { exec } = require('child_process');
 
 let win;
+
 function createWindow() {
-  const baseHeight = 60;
+  const baseHeight = 80;
   win = new BrowserWindow({
     width: 600,
     height: baseHeight,
     frame: false,
-    transparent: false,
-    backgroundColor: '#1e1e1ecc',
+    transparent: true,
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: true,
@@ -18,44 +18,52 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: false,
-      nodeIntegration: true
-    }
+      nodeIntegration: true,
+    },
   });
   win.baseHeight = baseHeight;
-
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
-  win.once('ready-to-show', () => {
+}
+
+function toggleWindow() {
+  if (!win) return;
+
+  if (win.isVisible()) {
+    win.hide();
+  } else {
+    win.center();
     win.show();
-    win.webContents.send('focus-search');
-  });
+  }
 }
 
 app.whenReady().then(() => {
   createWindow();
 
-  let shortcut = 'Super+Space';
-  let registered = globalShortcut.register(shortcut, toggleWindow);
+  win.on('show', () => {
+    win.focus();
+    win.webContents.send('focus-search');
+  });
 
-  function toggleWindow() {
-    if (win.isVisible()) {
-      win.hide();
-      const [width] = win.getSize();
-      win.setSize(width, win.baseHeight);
-      win.webContents.send('reset-search');
-    } else {
-      win.center();
-      win.show();
-      win.focus();
-      win.webContents.send('focus-search');
-    }
-  }
-
+  win.on('hide', () => {
+    const [width] = win.getSize();
+    win.setSize(width, win.baseHeight, false);
+    win.webContents.send('reset-search');
+  });
+  
+  const shortcut = 'Alt+Space';
+  const alternativeShortcut = 'Control+Shift+Space';
+  
+  const registered = globalShortcut.register(shortcut, toggleWindow) || globalShortcut.register(alternativeShortcut, toggleWindow);
+  
   if (!registered) {
-    shortcut = 'CommandOrControl+Space';
-    registered = globalShortcut.register(shortcut, toggleWindow);
+    console.error(`A '${shortcut}' vagy '${alternativeShortcut}' billentyűparancs regisztrálása sikertelen.`);
   }
 
-  if (!registered) console.error(`${shortcut} registration failed`);
+  ipcMain.on('hide-window', () => {
+    if (win && win.isVisible()) {
+      win.hide();
+    }
+  });
 
   ipcMain.on('launch-item', (_, itemPath) => {
     if (itemPath.endsWith('.desktop')) {
@@ -64,25 +72,22 @@ app.whenReady().then(() => {
     } else {
       shell.openPath(itemPath);
     }
+    if (win && win.isVisible()) {
+      win.hide();
+    }
   });
 
   ipcMain.on('open-url', (_, url) => {
     shell.openExternal(url);
-  });
-
-  ipcMain.on('hide-window', () => {
-    if (win) {
+    if (win && win.isVisible()) {
       win.hide();
-      const [width] = win.getSize();
-      win.setSize(width, win.baseHeight);
-      win.webContents.send('reset-search');
     }
   });
 
   ipcMain.on('adjust-height', (_, height) => {
     if (win) {
       const [width] = win.getSize();
-      win.setSize(width, Math.max(win.baseHeight, height));
+      win.setSize(width, Math.max(win.baseHeight, height), false);
     }
   });
 });

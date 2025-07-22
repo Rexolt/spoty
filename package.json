@@ -4,7 +4,6 @@
   "description": "Modern Spotlight-like search app for Linux",
   "main": "main.js",
   "scripts": {
-    
     "start": "LIBVA_DRIVER_NAME=nvidia electron . --disable-gpu --no-sandbox",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
@@ -18,7 +17,8 @@
     }
   },
   "dependencies": {
-    "fuse.js": "^6.6.2"
+    "fuse.js": "^6.6.2",
+    "lottie-web": "^5.12.2"
   },
   "devDependencies": {
     "electron": "^25.0.0",
