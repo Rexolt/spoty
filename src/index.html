@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hu">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Linux Spotlight</title>
+  <title>Spotlight</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-  <body>
-    <div id="overlay">
-      <label id="search-wrapper">
-        <div id="lottie-icon" class="search-icon"></div>
-        <input id="search" type="text" placeholder="What are you looking for?" autocomplete="off">
-      </label>
-      <div id="results"></div>
+<body>
+  <div class="container">
+    <div class="search-bar">
+      <div class="search-icon">🔍</div>
+      <input 
+        id="search" 
+        type="text" 
+        placeholder="Keresés alkalmazások, fájlok között..." 
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button id="clear-btn" style="display: none;">✕</button>
     </div>
-    <script src="../node_modules/lottie-web/build/player/lottie.min.js"></script>
-    <script src="renderer.js"></script>
-  </body>
+    <div id="results"></div>
+  </div>
+  
+  <script src="renderer.js"></script>
+</body>
 </html>

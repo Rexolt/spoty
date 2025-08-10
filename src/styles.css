@@ -1,80 +1,87 @@
-body {
+* {
   margin: 0;
   padding: 0;
-  background: transparent;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  user-select: none;
 }
 
-#overlay {
-  width: 100%;
-  height: 100%;
-  background: rgba(28, 29, 33, 0.85); 
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  background: transparent;
+  overflow: hidden;
+  color: #ffffff;
+}
+
+.container {
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
   border-radius: 12px;
-  padding: 10px;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  -webkit-app-region: drag;
-  transition: background 0.2s ease;
+  height: 100vh;
   overflow: hidden;
-  box-sizing: border-box;
 }
 
-#search-wrapper {
-  width: 100%;
+.search-bar {
   display: flex;
   align-items: center;
-  -webkit-app-region: no-drag;
-  background: rgba(10, 10, 10, 0.2);
-  border-radius: 8px;
-  transition: box-shadow 0.2s ease-in-out;
-  border: 1px solid transparent;
-  height: 58px;
+  height: 60px;
+  padding: 0 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
 }
 
-#search-wrapper:focus-within {
-  box-shadow: 0 0 0 2px rgba(80, 129, 255, 0.7);
-  border-color: rgba(80, 129, 255, 0.5);
-}
-
-/* MÓDOSÍTOTT RÉSZ */
 .search-icon {
-  padding: 0 12px 0 16px;
-  width: 28px;  /* Hozzáadva */
-  height: 28px; /* Hozzáadva */
-  opacity: 0.8;
-  object-fit: contain; /* Hozzáadva a megfelelő méretezésért */
+  font-size: 20px;
+  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 #search {
   flex: 1;
-  padding: 0 16px 0 0;
-  height: 100%;
-  font-size: 22px;
-  border: none;
   background: transparent;
-  color: #f5f5f5;
+  border: none;
   outline: none;
-  -webkit-app-region: no-drag;
+  font-size: 18px;
+  font-weight: 300;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+#search::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+#clear-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+#clear-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
 }
 
 #results {
-  width: 100%;
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  -webkit-app-region: no-drag;
-  max-height: 320px;
+  flex: 1;
   overflow-y: auto;
-  padding-right: 4px;
+  overflow-x: hidden;
+  padding: 8px;
+  max-height: 540px;
 }
 
 #results::-webkit-scrollbar {
@@ -86,68 +93,167 @@ body {
 }
 
 #results::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-}
-
-#results::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }
 
 .result-item {
-  background: transparent;
-  margin: 2px 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  opacity: 0;
-  animation-name: fadeSlide;
-  animation-duration: 0.4s;
-  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  animation-fill-mode: forwards;
-  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
-  gap: 12px;
+  padding: 8px 12px;
+  margin: 2px 0;
+  border-radius: 8px;
   cursor: pointer;
-  color: #e0e0e0;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: all 0.15s;
+  gap: 12px;
+  min-height: 48px;
+  animation: slideIn 0.2s ease-out;
 }
 
-@keyframes fadeSlide {
+@keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateY(-10px) scale(0.98);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
+.result-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.result-item.selected {
+  background: rgba(56, 132, 255, 0.2);
+  border: 1px solid rgba(56, 132, 255, 0.4);
+  padding: 7px 11px;
+}
+
+/* === IKON === */
 .result-icon {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  font-size: 20px;
 }
 
-.result-item span {
+.result-icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.result-content {
   flex: 1;
-  font-size: 16px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.result-item:hover, .result-item.selected {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(1.02);
+.result-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  color: #888;
-  cursor: default;
-  font-style: italic;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  gap: 12px;
 }
 
-.no-results:hover {
-  background: transparent;
-  transform: none;
+.no-results-icon {
+  font-size: 36px;
+  opacity: 0.5;
+}
+
+.no-results-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+body.light-mode {
+  color: #1d1d1f;
+}
+
+body.light-mode .container {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+body.light-mode .search-bar {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode #search {
+  color: #1d1d1f;
+}
+
+body.light-mode #search::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+body.light-mode #clear-btn {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+body.light-mode #clear-btn:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+body.light-mode .result-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .result-item.selected {
+  background: rgba(56, 132, 255, 0.1);
+}
+
+body.light-mode .result-title {
+  color: #1d1d1f;
+}
+
+body.light-mode .result-desc {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+body.light-mode .no-results {
+  color: rgba(0, 0, 0, 0.4);
 }
