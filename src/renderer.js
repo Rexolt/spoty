@@ -1,187 +1,262 @@
-const { ipcRenderer } = require('electron');
-const Fuse = require('fuse.js');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
-
-const iconContainer = document.getElementById('lottie-icon');
-let currentAnimation = null;
-
-
-function loadMainIcon() {
-  if (currentAnimation) {
-    currentAnimation.destroy();
-  }
-  currentAnimation = lottie.loadAnimation({
-    container: iconContainer,
-    renderer: 'svg',
-    loop: false,
-    autoplay: false,
-    path: 'wired-flat-19-magnifier-zoom-search-morph-cross.json'
-  });
-}
-
-
-function findIconPath(iconName) {
-  if (!iconName) return null;
-  const iconDirs = [
-    '/usr/share/icons/hicolor/48x48/apps',
-    '/usr/share/icons/hicolor/256x256/apps',
-    '/usr/share/icons/hicolor/64x64/apps',
-    '/usr/share/pixmaps',
-    '/usr/share/icons/hicolor/scalable/apps'
-  ];
-  const exts = ['png', 'svg', 'xpm', 'jpg'];
-
-  if (path.isAbsolute(iconName)) {
-    if (fs.existsSync(iconName)) return iconName;
-    for (const ext of exts) {
-      const p = `${iconName}.${ext}`;
-      if (fs.existsSync(p)) return p;
-    }
-  }
-
-  for (const dir of iconDirs) {
-    for (const ext of exts) {
-      const full = path.join(dir, `${iconName}.${ext}`);
-      if (fs.existsSync(full)) return full;
-    }
-  }
-  return null;
-}
-
-
-function loadApplications() {
-  const appsDirs = [
-    '/usr/share/applications',
-    path.join(os.homedir(), '.local/share/applications')
-  ];
-  const apps = [];
-  appsDirs.forEach(dir => {
-    if (!fs.existsSync(dir)) return;
-    fs.readdirSync(dir).forEach(file => {
-      if (!file.endsWith('.desktop')) return;
-      const full = path.join(dir, file);
-      const content = fs.readFileSync(full, 'utf-8');
-      const nameMatch = content.match(/^Name=(.+)$/m);
-      if (nameMatch) {
-        const iconMatch = content.match(/^Icon=(.+)$/m);
-        const iconPath = iconMatch ? findIconPath(iconMatch[1]) : null;
-        apps.push({ name: nameMatch[1], path: full, icon: iconPath });
-      }
-    });
-  });
-  return apps;
-}
-
-const appItems = loadApplications();
-const fuse = new Fuse(appItems, { keys: ['name'], threshold: 0.3 });
-
 const searchInput = document.getElementById('search');
-const resultsDiv = document.getElementById('results');
-const baseHeight = 80;
+const resultsContainer = document.getElementById('results');
+const clearButton = document.getElementById('clear-btn');
 
-function adjustHeight() {
-  const resultsHeight = resultsDiv.scrollHeight;
-  const total = Math.min(baseHeight + resultsHeight, 400);
-  ipcRenderer.send('adjust-height', total);
+let currentResults = [];
+let selectedIndex = -1;
+let searchTimeout = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  searchInput.focus();
+  setupEventListeners();
+});
+
+function setupEventListeners() {
+  searchInput.addEventListener('input', handleSearchInput);
+  
+  clearButton.addEventListener('click', clearSearch);
+  
+  document.addEventListener('keydown', handleKeyPress);
+  
+  
+  window.electron.on('window-show', () => {
+    searchInput.focus();
+    searchInput.select();
+  });
+  
+  window.electron.on('window-hide', () => {
+    clearSearch();
+  });
 }
 
-function parseWebQuery(q) {
-  const m = q.trim().match(/^web:\s*(.+)$/i);
-  return m ? m[1] : null;
-}
-
-searchInput.addEventListener('input', () => {
-  const query = searchInput.value;
-  resultsDiv.innerHTML = '';
-
-  if (query) {
-    const web = parseWebQuery(query);
-    if (!web) {
-      const results = fuse.search(query).slice(0, 20);
-      if (results.length === 0) {
-        const el = document.createElement('div');
-        el.className = 'result-item no-results';
-        el.textContent = 'Nincs találat';
-        resultsDiv.appendChild(el);
-        
-        if (currentAnimation && currentAnimation.path === 'wired-flat-19-magnifier-zoom-search-morph-cross.json') {
-          currentAnimation.goToAndPlay(0, true);
-        }
-      } else {
-        results.forEach(({ item }, index) => {
-          const el = document.createElement('div');
-          el.className = 'result-item';
-          el.style.animationDelay = `${index * 30}ms`;
-
-          
-          if (item.icon) {
-            const img = document.createElement('img');
-            img.src = `file://${item.icon}`;
-            img.className = 'result-icon';
-            el.appendChild(img);
-          }
-          
-          const span = document.createElement('span');
-          span.textContent = item.name;
-          el.appendChild(span);
-
-          el.onclick = () => ipcRenderer.send('launch-item', item.path);
-          resultsDiv.appendChild(el);
-        });
-      }
-    }
-  }
-  adjustHeight();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    ipcRenderer.send('hide-window');
-  } else if (e.key === 'Enter') {
-    const web = parseWebQuery(searchInput.value);
-    if (web) {
-      const url = `https://duckduckgo.com/?q=${encodeURIComponent(web)}`;
-      ipcRenderer.send('open-url', url);
-    } else {
-      const first = resultsDiv.querySelector('.result-item:not(.no-results)');
-      if (first) first.click();
-    }
-  }
-});
-
-window.addEventListener('DOMContentLoaded', () => {
-  searchInput.focus();
-  adjustHeight();
-});
-
-ipcRenderer.on('focus-search', () => {
-  searchInput.focus();
-  if (currentAnimation) {
-    currentAnimation.destroy();
+function handleSearchInput(e) {
+  const query = e.target.value;
+  
+  clearButton.style.display = query ? 'block' : 'none';
+  
+  clearTimeout(searchTimeout);
+  
+  if (!query) {
+    clearResults();
+    return;
   }
   
+  searchTimeout = setTimeout(() => {
+    performSearch(query);
+  }, 200);
+}
 
-  currentAnimation = lottie.loadAnimation({
-    container: iconContainer,
-    renderer: 'svg',
-    loop: false,
-    autoplay: true,
-    path: 'animation.json'
-  });
-
-
-  currentAnimation.addEventListener('complete', loadMainIcon);
-});
-
-ipcRenderer.on('reset-search', () => {
-  searchInput.value = '';
-  resultsDiv.innerHTML = '';
-  if (currentAnimation) {
-    currentAnimation.destroy();
-    currentAnimation = null;
+async function performSearch(query) {
+  try {
+    const results = await window.electron.invoke('search', query);
+    currentResults = results || [];
+    renderResults(currentResults);
+  } catch (error) {
+    console.error('Search error:', error);
+    currentResults = [];
+    renderResults([]);
   }
-  adjustHeight();
-});
+}
+
+function renderResults(results) {
+  resultsContainer.innerHTML = '';
+  selectedIndex = -1;
+  
+  if (results.length === 0) {
+    if (searchInput.value) {
+      resultsContainer.innerHTML = `
+        <div class="no-results">
+          <div class="no-results-icon">🔍</div>
+          <div class="no-results-text">Nincs találat</div>
+        </div>
+      `;
+    }
+    updateWindowSize();
+    return;
+  }
+  
+  results.forEach((item, index) => {
+    const element = createResultElement(item, index);
+    resultsContainer.appendChild(element);
+  });
+  
+  updateWindowSize();
+}
+
+function createResultElement(item, index) {
+  const div = document.createElement('div');
+  div.className = 'result-item';
+  div.dataset.index = index;
+  
+  // Ikon
+  const icon = document.createElement('div');
+  icon.className = 'result-icon';
+  
+  if (item.type === 'calc') {
+    icon.innerHTML = '🧮';
+  } else if (item.type === 'command') {
+    icon.innerHTML = '⚡';
+  } else if (item.type === 'clipboard') {
+    icon.innerHTML = '📋';
+  } else if (item.type === 'file') {
+    icon.innerHTML = '📄';
+  } else if (item.iconPath) {
+    const img = document.createElement('img');
+    img.src = `file://${item.iconPath}`;
+    img.onerror = () => {
+      icon.innerHTML = '📦';
+    };
+    icon.appendChild(img);
+  } else {
+    icon.innerHTML = '📦';
+    loadIcon(item.icon).then(path => {
+      if (path) {
+        const img = document.createElement('img');
+        img.src = `file://${path}`;
+        icon.innerHTML = '';
+        icon.appendChild(img);
+      }
+    });
+  }
+  
+  const content = document.createElement('div');
+  content.className = 'result-content';
+  
+  const title = document.createElement('div');
+  title.className = 'result-title';
+  title.textContent = item.name;
+  
+  const desc = document.createElement('div');
+  desc.className = 'result-desc';
+  desc.textContent = item.description || '';
+  
+  content.appendChild(title);
+  if (item.description) {
+    content.appendChild(desc);
+  }
+  
+  div.appendChild(icon);
+  div.appendChild(content);
+  
+  div.addEventListener('click', () => executeItem(item));
+  
+  div.addEventListener('mouseenter', () => selectItem(index));
+  
+  return div;
+}
+
+async function loadIcon(iconName) {
+  if (!iconName) return null;
+  try {
+    return await window.electron.invoke('get-icon', iconName);
+  } catch (e) {
+    return null;
+  }
+}
+
+function executeItem(item) {
+  switch (item.type) {
+    case 'app':
+      window.electron.send('app-launch', item.path);
+      break;
+    case 'file':
+      window.electron.send('app-launch', item.path);
+      break;
+    case 'command':
+      window.electron.send('command-run', item.command);
+      break;
+    case 'calc':
+    case 'clipboard':
+      window.electron.send('clipboard-copy', item.value || item.name);
+      break;
+  }
+}
+
+function selectItem(index) {
+  const items = resultsContainer.querySelectorAll('.result-item');
+  items.forEach((item, i) => {
+    if (i === index) {
+      item.classList.add('selected');
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+  selectedIndex = index;
+}
+
+function handleKeyPress(e) {
+  switch (e.key) {
+    case 'Escape':
+      if (searchInput.value) {
+        clearSearch();
+      } else {
+        window.electron.send('window-hide');
+      }
+      break;
+      
+    case 'Enter':
+      if (selectedIndex >= 0 && currentResults[selectedIndex]) {
+        executeItem(currentResults[selectedIndex]);
+      } else if (currentResults.length > 0) {
+        executeItem(currentResults[0]);
+      }
+      break;
+      
+    case 'ArrowDown':
+      e.preventDefault();
+      if (currentResults.length > 0) {
+        selectItem(Math.min(selectedIndex + 1, currentResults.length - 1));
+      }
+      break;
+      
+    case 'ArrowUp':
+      e.preventDefault();
+      if (currentResults.length > 0) {
+        selectItem(Math.max(selectedIndex - 1, 0));
+      }
+      break;
+      
+    case 'Tab':
+      e.preventDefault();
+      if (currentResults.length > 0) {
+        if (e.shiftKey) {
+          selectItem(selectedIndex > 0 ? selectedIndex - 1 : currentResults.length - 1);
+        } else {
+          selectItem(selectedIndex < currentResults.length - 1 ? selectedIndex + 1 : 0);
+        }
+      }
+      break;
+  }
+  
+  if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
+    const index = parseInt(e.key) - 1;
+    if (currentResults[index]) {
+      executeItem(currentResults[index]);
+    }
+  }
+}
+
+function clearSearch() {
+  searchInput.value = '';
+  clearButton.style.display = 'none';
+  clearResults();
+  searchInput.focus();
+}
+
+function clearResults() {
+  currentResults = [];
+  selectedIndex = -1;
+  resultsContainer.innerHTML = '';
+  updateWindowSize();
+}
+
+function updateWindowSize() {
+  setTimeout(() => {
+    const searchHeight = 60;
+    const resultsHeight = resultsContainer.scrollHeight || 0;
+    const padding = resultsHeight > 0 ? 10 : 0;
+    const totalHeight = searchHeight + resultsHeight + padding;
+    
+    window.electron.send('window-resize', totalHeight);
+  }, 10);
+}
