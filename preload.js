@@ -9,7 +9,6 @@ contextBridge.exposeInMainWorld('electron', {
   on: (channel, func) => {
     ipcRenderer.on(channel, (event, ...args) => func(...args));
   },
-  // Kétirányú kommunikáció: renderer -> main -> renderer
   invoke: (channel, data) => {
     return ipcRenderer.invoke(channel, data);
   }
