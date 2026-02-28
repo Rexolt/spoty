@@ -110,6 +110,10 @@
             <input type="checkbox" id="set-enable-files" class="toggle-switch">
           </label>
           <label class="setting-row">
+            <span data-i18n="settings_bookmarks">Könyvjelzők keresése</span>
+            <input type="checkbox" id="set-enable-bookmarks" class="toggle-switch">
+          </label>
+          <label class="setting-row">
             <span data-i18n="settings_web">Webes Keresés (g vagy ?)</span>
             <input type="checkbox" id="set-enable-web" class="toggle-switch">
           </label>
@@ -132,12 +136,21 @@
         </div>
 
         <div class="setting-group">
+          <h4 data-i18n="settings_aliases">Egyedi Gyorsparancsok (Aliasok)</h4>
+          <p class="setting-hint" data-i18n="settings_aliases_hint">Használj JSON formátumot a parancsokhoz.</p>
+          <textarea id="set-aliases" class="text-input" spellcheck="false"
+            style="min-height: 80px; width: 100%; font-family: monospace; font-size: 11px; margin-top: 8px;"
+            placeholder='{\n  "work": ["https://mail.google.com", "code ~/project"]\n}'></textarea>
+        </div>
+
+        <div class="setting-group">
           <h4 data-i18n="settings_ai">AI Mód</h4>
           <label class="setting-row">
             <span data-i18n="settings_provider">Szolgáltató</span>
             <select id="set-ai-provider" class="select-input">
               <option value="openai">OpenAI (ChatGPT)</option>
               <option value="gemini">Google Gemini</option>
+              <option value="ollama">Ollama (Helyi)</option>
             </select>
           </label>
 
@@ -169,6 +182,19 @@
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
               </select>
+            </label>
+          </div>
+
+          <!-- Ollama Settings -->
+          <div id="ollama-settings-block" style="display: none;">
+            <label class="setting-row vertical">
+              <span data-i18n="settings_ollama_url">Ollama URL</span>
+              <input type="text" id="set-ollama-url" placeholder="http://localhost:11434" class="text-input"
+                spellcheck="false">
+            </label>
+            <label class="setting-row vertical">
+              <span data-i18n="settings_model">Modell</span>
+              <input type="text" id="set-ollama-model" placeholder="llama3.2" class="text-input" spellcheck="false">
             </label>
           </div>
         </div>

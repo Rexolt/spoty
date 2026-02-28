@@ -16,6 +16,7 @@ const btnSaveSettings = document.getElementById('btn-save-settings');
 
 const setHotkey = document.getElementById('set-hotkey');
 const setEnableFiles = document.getElementById('set-enable-files');
+const setEnableBookmarks = document.getElementById('set-enable-bookmarks');
 const setEnableWeb = document.getElementById('set-enable-web');
 const setEnableSys = document.getElementById('set-enable-sys');
 const setEnableCalc = document.getElementById('set-enable-calc');
@@ -28,6 +29,10 @@ const setOpenaiModel = document.getElementById('set-openai-model');
 const geminiSettingsBlock = document.getElementById('gemini-settings-block');
 const setGeminiApiKey = document.getElementById('set-gemini-api-key');
 const setGeminiModel = document.getElementById('set-gemini-model');
+const ollamaSettingsBlock = document.getElementById('ollama-settings-block');
+const setOllamaUrl = document.getElementById('set-ollama-url');
+const setOllamaModel = document.getElementById('set-ollama-model');
+const setAliases = document.getElementById('set-aliases');
 const setLanguage = document.getElementById('set-language');
 const setTheme = document.getElementById('set-theme');
 
@@ -60,15 +65,19 @@ const i18n = {
     settings_hotkey: "Gyorsbillentyű",
     settings_modules: "Keresés & Modulok",
     settings_files: "Fájlok keresése",
+    settings_bookmarks: "Könyvjelzők keresése",
     settings_web: "Webes Keresés (g vagy ?)",
     settings_sys: "Rendszer Parancsok (lock, sleep...)",
     settings_calc: "Számológép",
     settings_clip: "Vágólap (clip)",
     settings_max: "Max találatok száma",
+    settings_aliases: "Egyedi Gyorsparancsok (Aliasok)",
+    settings_aliases_hint: "Használj JSON formátumot a parancsokhoz.",
     settings_ai: "AI Mód",
     settings_provider: "Szolgáltató",
     settings_openai_key: "OpenAI API Kulcs",
     settings_gemini_key: "Gemini API Kulcs",
+    settings_ollama_url: "Ollama URL",
     settings_model: "Modell",
     settings_save: "Mentés",
     no_results: "Nincs találat a következőre:"
@@ -94,15 +103,19 @@ const i18n = {
     settings_hotkey: "Hotkey",
     settings_modules: "Search & Modules",
     settings_files: "Search Files",
+    settings_bookmarks: "Search Bookmarks",
     settings_web: "Web Search (g or ?)",
     settings_sys: "System Commands (lock, sleep...)",
     settings_calc: "Calculator",
     settings_clip: "Clipboard (clip)",
-    settings_max: "Max Results",
+    settings_max: "Max results",
+    settings_aliases: "Custom Shortcuts (Aliases)",
+    settings_aliases_hint: "Use JSON format to define commands.",
     settings_ai: "AI Mode",
     settings_provider: "Provider",
     settings_openai_key: "OpenAI API Key",
     settings_gemini_key: "Gemini API Key",
+    settings_ollama_url: "Ollama URL",
     settings_model: "Model",
     settings_save: "Save",
     no_results: "No results for:"
@@ -211,12 +224,16 @@ function setupEventListeners() {
   btnSaveSettings.addEventListener('click', saveSettings);
 
   setAiProvider.addEventListener('change', () => {
+    openaiSettingsBlock.style.display = 'none';
+    geminiSettingsBlock.style.display = 'none';
+    if (ollamaSettingsBlock) ollamaSettingsBlock.style.display = 'none';
+
     if (setAiProvider.value === 'openai') {
       openaiSettingsBlock.style.display = 'block';
-      geminiSettingsBlock.style.display = 'none';
-    } else {
-      openaiSettingsBlock.style.display = 'none';
+    } else if (setAiProvider.value === 'gemini') {
       geminiSettingsBlock.style.display = 'block';
+    } else if (setAiProvider.value === 'ollama' && ollamaSettingsBlock) {
+      ollamaSettingsBlock.style.display = 'block';
     }
   });
 }
@@ -260,29 +277,44 @@ function populateSettingsUI(config) {
   if (setTheme) setTheme.value = config.theme || 'dark';
   if (setHotkey) setHotkey.value = config.hotkey || 'Alt+Space';
   setEnableFiles.checked = config.search.enableFiles !== false;
+  if (setEnableBookmarks) setEnableBookmarks.checked = config.search.enableBookmarks !== false;
   if (setEnableWeb) setEnableWeb.checked = config.search.enableWebSearch !== false;
   if (setEnableSys) setEnableSys.checked = config.search.enableSysCommands !== false;
   if (setEnableCalc) setEnableCalc.checked = config.search.enableCalculator !== false;
   if (setEnableClip) setEnableClip.checked = config.search.enableClipboard !== false;
-  setMaxResults.value = config.search.maxResults;
-  if (config.ai) {
-    setAiProvider.value = config.ai.provider || 'openai';
-    setOpenaiApiKey.value = config.ai.openaiApiKey || '';
-    setOpenaiModel.value = config.ai.openaiModel || 'gpt-3.5-turbo';
-    setGeminiApiKey.value = config.ai.geminiApiKey || '';
-    setGeminiModel.value = config.ai.geminiModel || 'gemini-2.5-flash';
+  if (setMaxResults) setMaxResults.value = config.search.maxResults || 8;
+  if (setAliases) setAliases.value = JSON.stringify(config.aliases || {}, null, 2);
 
-    // Trigger change to update block visibility
-    setAiProvider.dispatchEvent(new Event('change'));
-  }
+  if (setAiProvider) setAiProvider.value = config.ai.provider || 'openai';
+  setOpenaiApiKey.value = config.ai.openaiApiKey || '';
+  setOpenaiModel.value = config.ai.openaiModel || 'gpt-3.5-turbo';
+  setGeminiApiKey.value = config.ai.geminiApiKey || '';
+  setGeminiModel.value = config.ai.geminiModel || 'gemini-2.5-flash';
+  if (setOllamaUrl) setOllamaUrl.value = config.ai.ollamaUrl || 'http://localhost:11434';
+  if (setOllamaModel) setOllamaModel.value = config.ai.ollamaModel || 'llama3.2';
+
+  // Trigger change to update block visibility
+  setAiProvider.dispatchEvent(new Event('change'));
 }
 
 function saveSettings() {
+  let parsedAliases = {};
+  if (setAliases) {
+    try {
+      parsedAliases = JSON.parse(setAliases.value);
+    } catch (e) {
+      console.warn("Invalid aliases JSON, keeping old.");
+      parsedAliases = appSettings.aliases || {};
+    }
+  }
+
   const newSettings = {
     language: setLanguage ? setLanguage.value : 'hu',
     theme: setTheme ? setTheme.value : 'dark',
     hotkey: setHotkey ? setHotkey.value : 'Alt+Space',
+    aliases: parsedAliases,
     enableFiles: setEnableFiles.checked,
+    enableBookmarks: setEnableBookmarks ? setEnableBookmarks.checked : true,
     enableWebSearch: setEnableWeb ? setEnableWeb.checked : true,
     enableSysCommands: setEnableSys ? setEnableSys.checked : true,
     enableCalculator: setEnableCalc ? setEnableCalc.checked : true,
@@ -293,7 +325,9 @@ function saveSettings() {
       openaiApiKey: setOpenaiApiKey.value,
       openaiModel: setOpenaiModel.value,
       geminiApiKey: setGeminiApiKey.value,
-      geminiModel: setGeminiModel.value
+      geminiModel: setGeminiModel.value,
+      ollamaUrl: setOllamaUrl ? setOllamaUrl.value : 'http://localhost:11434',
+      ollamaModel: setOllamaModel ? setOllamaModel.value : 'llama3.2'
     }
   };
 
@@ -301,7 +335,9 @@ function saveSettings() {
   appSettings.language = newSettings.language;
   appSettings.theme = newSettings.theme;
   appSettings.hotkey = newSettings.hotkey;
+  appSettings.aliases = newSettings.aliases;
   appSettings.search.enableFiles = newSettings.enableFiles;
+  appSettings.search.enableBookmarks = newSettings.enableBookmarks;
   appSettings.search.enableWebSearch = newSettings.enableWebSearch;
   appSettings.search.enableSysCommands = newSettings.enableSysCommands;
   appSettings.search.enableCalculator = newSettings.enableCalculator;
@@ -313,6 +349,8 @@ function saveSettings() {
   appSettings.ai.openaiModel = newSettings.ai.openaiModel;
   appSettings.ai.geminiApiKey = newSettings.ai.geminiApiKey;
   appSettings.ai.geminiModel = newSettings.ai.geminiModel;
+  appSettings.ai.ollamaUrl = newSettings.ai.ollamaUrl;
+  appSettings.ai.ollamaModel = newSettings.ai.ollamaModel;
 
   // Apply immediately
   translateUI(appSettings.language);
@@ -468,7 +506,9 @@ function createResultElement(item, index) {
   const icon = document.createElement('div');
   icon.className = 'result-icon';
 
-  if (item.type === 'calc') {
+  if (item.type === 'weather') {
+    icon.innerHTML = '⛅';
+  } else if (item.type === 'calc') {
     icon.innerHTML = '🧮';
   } else if (item.type === 'command') {
     icon.innerHTML = '⚡';
@@ -520,6 +560,8 @@ function createResultElement(item, index) {
     case 'app': typeLabel = 'Alkalmazás'; break;
     case 'command': typeLabel = 'Parancs'; break;
     case 'syscommand': typeLabel = 'Rendszer Parancs'; break;
+    case 'alias': typeLabel = 'Gyorsparancs (Alias)'; break;
+    case 'weather': typeLabel = 'Időjárás'; break;
     case 'web': typeLabel = 'Web Keresés'; break;
     case 'calc': typeLabel = 'Kalkulátor'; break;
     case 'clipboard': typeLabel = 'Vágólap'; break;
@@ -534,6 +576,10 @@ function createResultElement(item, index) {
   div.appendChild(icon);
   div.appendChild(content);
   div.appendChild(badge);
+
+  if (item.type === 'weather') {
+    div.classList.add('weather-card');
+  }
 
   div.addEventListener('click', (e) => executeItem(item, e.shiftKey));
 
@@ -580,6 +626,9 @@ function executeCommand(item, showFolder = false) {
     case 'command':
     case 'syscommand':
       window.electron.send('command-run', item.command);
+      break;
+    case 'alias':
+      window.electron.send('alias-run', item.commands);
       break;
     case 'web':
       window.electron.send('url-open', item.url);

@@ -10,6 +10,10 @@ const iconPath = path.join(__dirname, 'build', 'icons', '512x512.png');
 let mainWindow;
 let clipboardHistory = [];
 
+// Currency cache
+let exchangeRates = null;
+let exchangeRatesTime = 0;
+
 const configPath = path.join(os.homedir(), '.config', 'spoty');
 const configFile = path.join(configPath, 'config.json');
 
@@ -23,6 +27,7 @@ let config = {
   search: {
     maxResults: 8,
     enableFiles: true,
+    enableBookmarks: true,
     enableWebSearch: true,
     enableSysCommands: true,
     enableCalculator: true,
@@ -33,8 +38,11 @@ let config = {
     openaiApiKey: '',
     openaiModel: 'gpt-3.5-turbo',
     geminiApiKey: '',
-    geminiModel: 'gemini-2.5-flash'
+    geminiModel: 'gemini-2.5-flash',
+    ollamaUrl: 'http://localhost:11434',
+    ollamaModel: 'llama3.2'
   },
+  aliases: {},
   theme: 'dark',
   language: 'hu',
   hotkey: 'Alt+Space'
@@ -55,6 +63,7 @@ function loadConfig() {
       if (config.hotkey === undefined) config.hotkey = 'Alt+Space';
       if (config.theme === undefined) config.theme = 'dark';
       if (config.language === undefined) config.language = 'hu';
+      if (config.search.enableBookmarks === undefined) config.search.enableBookmarks = true;
       if (config.search.enableWebSearch === undefined) config.search.enableWebSearch = true;
       if (config.search.enableSysCommands === undefined) config.search.enableSysCommands = true;
       if (config.search.enableCalculator === undefined) config.search.enableCalculator = true;
@@ -100,6 +109,28 @@ function saveConfig() {
 }
 
 loadConfig();
+
+// Pre-fetch exchange rates asynchronously
+async function fetchExchangeRates() {
+  const now = Date.now();
+  if (exchangeRates && (now - exchangeRatesTime < 3600000)) {
+    return exchangeRates; // 1 hour cache
+  }
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await res.json();
+    if (data && data.rates) {
+      exchangeRates = data.rates;
+      exchangeRatesTime = now;
+    }
+  } catch (error) {
+    console.error('Failed to fetch exchange rates:', error);
+  }
+  return exchangeRates;
+}
+
+// Fire and forget
+fetchExchangeRates();
 
 function createWindow() {
   const display = screen.getPrimaryDisplay();
@@ -235,6 +266,65 @@ async function searchApplications(query) {
   return apps;
 }
 
+// Browser Bookmarks search
+async function searchBookmarks(query) {
+  if (!config.search.enableBookmarks || query.length < 2) return [];
+
+  const bookmarkPaths = [
+    path.join(os.homedir(), '.config', 'google-chrome', 'Default', 'Bookmarks'),
+    path.join(os.homedir(), '.config', 'BraveSoftware', 'Brave-Browser', 'Default', 'Bookmarks'),
+    path.join(os.homedir(), '.config', 'chromium', 'Default', 'Bookmarks')
+  ];
+
+  const results = [];
+  const qLower = query.toLowerCase();
+
+  function extractUrls(node) {
+    if (node.type === 'url' && node.url && node.name) {
+      if (node.name.toLowerCase().includes(qLower) || node.url.toLowerCase().includes(qLower)) {
+        results.push({
+          type: 'web',
+          name: node.name,
+          url: node.url,
+          description: `Könyvjelző • ${new URL(node.url).hostname}`
+        });
+      }
+    } else if (node.type === 'folder' && node.children) {
+      for (const child of node.children) {
+        extractUrls(child);
+      }
+    }
+  }
+
+  for (const bp of bookmarkPaths) {
+    try {
+      if (fs.existsSync(bp)) {
+        const data = await fs.promises.readFile(bp, 'utf-8');
+        const json = JSON.parse(data);
+        if (json.roots) {
+          if (json.roots.bookmark_bar) extractUrls(json.roots.bookmark_bar);
+          if (json.roots.other) extractUrls(json.roots.other);
+          if (json.roots.synced) extractUrls(json.roots.synced);
+        }
+      }
+    } catch (e) {
+      // Missing or unreadable
+    }
+  }
+
+  // Deduplicate by URL
+  const uniqueUrls = new Set();
+  const dedupedResults = [];
+  for (const res of results) {
+    if (!uniqueUrls.has(res.url)) {
+      uniqueUrls.add(res.url);
+      dedupedResults.push(res);
+    }
+  }
+
+  return dedupedResults;
+}
+
 async function searchFiles(query) {
   if (!config.search.enableFiles || query.length < 3) return [];
 
@@ -353,8 +443,56 @@ app.whenReady().then(() => {
     hideWindow();
   });
 
+  ipcMain.on('alias-run', (_, commands) => {
+    commands.forEach(cmd => {
+      if (cmd.startsWith('http://') || cmd.startsWith('https://')) {
+        shell.openExternal(cmd);
+      } else {
+        exec(cmd);
+      }
+    });
+    hideWindow();
+  });
+
   ipcMain.handle('search', async (_, query) => {
     const results = [];
+
+    // Weather check
+    const weatherMatch = query.match(/^(?:időjárás|weather)\s+(.+)$/i);
+    if (weatherMatch) {
+      const city = weatherMatch[1].trim();
+      try {
+        const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, { signal: AbortSignal.timeout(3000) });
+        if (res.ok) {
+          const data = await res.json();
+          const current = data.current_condition[0];
+          results.push({
+            type: 'weather',
+            name: `${city.charAt(0).toUpperCase() + city.slice(1)}`,
+            tempText: `${current.temp_C}°C`,
+            condition: current.weatherDesc[0].value,
+            feelsLike: `${current.FeelsLikeC}°C`,
+            humidity: `${current.humidity}%`,
+            description: `Hőmérséklet: ${current.temp_C}°C | Érzet: ${current.FeelsLikeC}°C | Páratartalom: ${current.humidity}%`
+          });
+          // If we have a weather hit, we can just return it exclusively for a clean look
+          return results;
+        }
+      } catch (e) {
+        console.error("Weather fetch failed:", e);
+      }
+    }
+
+    // Check specific aliases
+    const qLower = query.toLowerCase();
+    if (config.aliases && config.aliases[qLower]) {
+      results.push({
+        type: 'alias',
+        name: `Gyorsparancs: ${qLower}`,
+        commands: config.aliases[qLower],
+        description: `Több művelet futtatása (${config.aliases[qLower].length} elem)`
+      });
+    }
 
     if (query.startsWith('>')) {
       const cmd = query.substring(1).trim();
@@ -418,13 +556,73 @@ app.whenReady().then(() => {
         description: 'Vágólap elem'
       }));
     }
-    // Default fallback (apps & files)
-    else if (query.length > 0) {
-      const apps = await searchApplications(query);
-      const files = await searchFiles(query);
+    // Converter (Unit / Currency)
+    else {
+      const convertMatch = query.match(/^([\d.,]+)\s*([a-zA-Z]+)\s+(?:in|to|ba|be)\s+([a-zA-Z]+)$/i);
+      if (convertMatch) {
+        let valStr = convertMatch[1].replace(',', '.');
+        let amount = parseFloat(valStr);
+        let from = convertMatch[2].toLowerCase();
+        let to = convertMatch[3].toLowerCase();
 
-      results.push(...apps.slice(0, 5));
-      results.push(...files.slice(0, 3));
+        if (!isNaN(amount)) {
+          // Temperature
+          let isTemp = false;
+          let tempCalc = null;
+          if (from === 'c' && to === 'f') { tempCalc = (amount * 9 / 5) + 32; isTemp = true; }
+          if (from === 'f' && to === 'c') { tempCalc = (amount - 32) * 5 / 9; isTemp = true; }
+
+          if (isTemp) {
+            results.push({
+              type: 'calc',
+              name: `${amount}°${from.toUpperCase()} = ${tempCalc.toFixed(2)}°${to.toUpperCase()}`,
+              value: tempCalc.toString(),
+              description: 'Hőmérséklet konverter'
+            });
+          } else {
+            // Units (Length & Weight)
+            const units = {
+              mm: 0.001, cm: 0.01, m: 1, km: 1000,
+              in: 0.0254, ft: 0.3048, yd: 0.9144, mi: 1609.344,
+              mg: 0.001, g: 1, kg: 1000, oz: 28.3495, lb: 453.592
+            };
+
+            const rates = await fetchExchangeRates();
+
+            if (units[from] && units[to]) {
+              const converted = (amount * units[from]) / units[to];
+              results.push({
+                type: 'calc',
+                name: `${amount} ${from} = ${converted.toFixed(4)} ${to}`,
+                value: converted.toString(),
+                description: 'Mértékegység konverter'
+              });
+            } else if (rates && rates[from.toUpperCase()] && rates[to.toUpperCase()]) {
+              // Currency
+              const usdVal = amount / rates[from.toUpperCase()];
+              const finalAmount = usdVal * rates[to.toUpperCase()];
+              results.push({
+                type: 'calc',
+                name: `${amount} ${from.toUpperCase()} = ${finalAmount.toLocaleString('hu-HU', { maximumFractionDigits: 2 })} ${to.toUpperCase()}`,
+                value: finalAmount.toString(),
+                description: 'Valutaváltó'
+              });
+            }
+          }
+        }
+      }
+
+      // Default fallback (apps & files & bookmarks)
+      if (results.length === 0 && query.length > 0) {
+        const apps = await searchApplications(query);
+        const files = await searchFiles(query);
+        const bookmarks = await searchBookmarks(query);
+
+        // Mix results, prioritizing apps
+        results.push(...apps.slice(0, 5));
+        results.push(...bookmarks.slice(0, 3));
+        results.push(...files.slice(0, 3));
+      }
     }
 
     return results.slice(0, config.search.maxResults);
@@ -492,6 +690,28 @@ app.whenReady().then(() => {
         } else {
           throw new Error("Nem értelmezhető válasz érkezett a Gemini API-tól.");
         }
+      } else if (config.ai.provider === 'ollama') {
+        const ollamaBaseUrl = config.ai.ollamaUrl || 'http://localhost:11434';
+
+        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: config.ai.ollamaModel || 'llama3.2',
+            prompt: prompt,
+            stream: false
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.text();
+          throw new Error(`Ollama Hiba: ${response.status} ${errData}`);
+        }
+
+        const data = await response.json();
+        return data.response;
       } else {
         throw new Error("Ismeretlen AI szolgáltató.");
       }
