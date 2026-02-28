@@ -1,6 +1,6 @@
 {
   "name": "spoty",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Modern Spotlight-like search app for Linux",
   "main": "main.js",
   "homepage": "https://github.com/Rexolt/spoty",
@@ -11,7 +11,8 @@
   "scripts": {
     "start": "LIBVA_DRIVER_NAME=nvidia electron . --disable-gpu --no-sandbox",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "build": "electron-builder --linux"
   },
   "build": {
     "appId": "com.lqface.spoty",
@@ -23,8 +24,12 @@
       "build/icons/*"
     ],
     "linux": {
-      "target": ["AppImage", "deb", "rpm"],
-      "icon": "build/icons", 
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "build/icons",
       "category": "Utility",
       "desktop": {
         "Name": "Spoty",
