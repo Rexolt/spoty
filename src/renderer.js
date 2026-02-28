@@ -402,7 +402,7 @@ function createResultElement(item, index) {
   div.appendChild(content);
   div.appendChild(badge);
 
-  div.addEventListener('click', () => executeItem(item));
+  div.addEventListener('click', (e) => executeItem(item, e.shiftKey));
 
   div.addEventListener('mouseenter', () => selectItem(index, false)); // false to prevent scroll jumping on mouse hover
 
@@ -418,20 +418,25 @@ async function loadIcon(iconName) {
   }
 }
 
-function executeItem(item) {
+function executeItem(item, showFolder = false) {
   // Little animation feedback before execute
   const selectedEl = resultsContainer.querySelector('.result-item.selected');
   if (selectedEl) {
     selectedEl.style.transform = 'scale(0.96)';
     setTimeout(() => {
-      executeCommand(item);
+      executeCommand(item, showFolder);
     }, 50);
   } else {
-    executeCommand(item);
+    executeCommand(item, showFolder);
   }
 }
 
-function executeCommand(item) {
+function executeCommand(item, showFolder = false) {
+  if (showFolder && (item.type === 'file' || item.type === 'app')) {
+    window.electron.send('item-show-folder', item.path);
+    return;
+  }
+
   switch (item.type) {
     case 'app':
       window.electron.send('app-launch', item.path);
@@ -486,9 +491,9 @@ function handleKeyPress(e) {
       }
 
       if (selectedIndex >= 0 && currentResults[selectedIndex]) {
-        executeItem(currentResults[selectedIndex]);
+        executeItem(currentResults[selectedIndex], e.shiftKey);
       } else if (currentResults.length > 0) {
-        executeItem(currentResults[0]);
+        executeItem(currentResults[0], e.shiftKey);
       }
       break;
 
