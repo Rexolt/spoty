@@ -35,6 +35,8 @@ let config = {
     geminiApiKey: '',
     geminiModel: 'gemini-2.5-flash'
   },
+  theme: 'dark',
+  language: 'hu',
   hotkey: 'Alt+Space'
 };
 
@@ -51,6 +53,8 @@ function loadConfig() {
 
       // Ensure defaults for new properties if not present in loaded config
       if (config.hotkey === undefined) config.hotkey = 'Alt+Space';
+      if (config.theme === undefined) config.theme = 'dark';
+      if (config.language === undefined) config.language = 'hu';
       if (config.search.enableWebSearch === undefined) config.search.enableWebSearch = true;
       if (config.search.enableSysCommands === undefined) config.search.enableSysCommands = true;
       if (config.search.enableCalculator === undefined) config.search.enableCalculator = true;

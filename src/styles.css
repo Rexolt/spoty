@@ -17,7 +17,7 @@
   --saturate: 220%;
 }
 
-body.light-mode {
+body.theme-light {
   --bg-color: rgba(250, 250, 252, 0.4);
   /* Lower opacity for frosted glass */
   --border-color: rgba(0, 0, 0, 0.1);
@@ -29,6 +29,42 @@ body.light-mode {
   --selection-bg: rgba(0, 0, 0, 0.1);
   /* Stronger frost */
   --selection-border: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-ocean {
+  --bg-color: rgba(5, 25, 45, 0.5);
+  --border-color: rgba(0, 150, 255, 0.15);
+  --border-highlight: rgba(0, 200, 255, 0.3);
+  --text-main: rgba(230, 245, 255, 0.95);
+  --text-muted: rgba(180, 210, 235, 0.6);
+  --accent: #0A84FF;
+  --accent-hover: #409CFF;
+  --selection-bg: rgba(0, 150, 255, 0.15);
+  --selection-border: rgba(0, 150, 255, 0.25);
+}
+
+body.theme-forest {
+  --bg-color: rgba(10, 30, 15, 0.5);
+  --border-color: rgba(46, 204, 113, 0.15);
+  --border-highlight: rgba(46, 204, 113, 0.3);
+  --text-main: rgba(235, 255, 240, 0.95);
+  --text-muted: rgba(180, 220, 190, 0.6);
+  --accent: #2ecc71;
+  --accent-hover: #27ae60;
+  --selection-bg: rgba(46, 204, 113, 0.15);
+  --selection-border: rgba(46, 204, 113, 0.25);
+}
+
+body.theme-midnight {
+  --bg-color: rgba(0, 0, 0, 0.75);
+  --border-color: rgba(255, 255, 255, 0.05);
+  --border-highlight: rgba(255, 255, 255, 0.1);
+  --text-main: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --accent: #c77dff;
+  --accent-hover: #e0aaff;
+  --selection-bg: rgba(255, 255, 255, 0.08);
+  --selection-border: rgba(255, 255, 255, 0.15);
 }
 
 * {
@@ -119,7 +155,7 @@ body.ai-mode {
   --selection-border: rgba(157, 78, 221, 0.3);
 }
 
-body.light-mode.ai-mode {
+body.theme-light.ai-mode {
   --bg-color: rgba(240, 230, 250, 0.85);
   --border-color: rgba(157, 78, 221, 0.2);
   --selection-bg: rgba(157, 78, 221, 0.1);
@@ -148,7 +184,7 @@ body.light-mode.ai-mode {
   -webkit-app-region: no-drag;
 }
 
-body.light-mode .mode-tabs {
+body.theme-light .mode-tabs {
   background: rgba(0, 0, 0, 0.05);
 }
 
@@ -303,7 +339,7 @@ body.ai-mode .mode-btn.active {
   transform: scale(1.05);
 }
 
-body.light-mode #clear-btn:hover {
+body.theme-light #clear-btn:hover {
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -344,7 +380,7 @@ body.light-mode #clear-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-body.light-mode #results:hover::-webkit-scrollbar-thumb {
+body.theme-light #results:hover::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.1);
 }
 
@@ -352,7 +388,7 @@ body.light-mode #results:hover::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
-body.light-mode #results::-webkit-scrollbar-thumb:hover {
+body.theme-light #results::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.2);
 }
 
@@ -399,7 +435,7 @@ body.light-mode #results::-webkit-scrollbar-thumb:hover {
   pointer-events: none;
 }
 
-body.light-mode .result-item::after {
+body.theme-light .result-item::after {
   background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.05), transparent);
 }
 
@@ -433,12 +469,12 @@ body.light-mode .result-item::after {
     0 1px 0 rgba(255, 255, 255, 0.1) inset;
 }
 
-body.light-mode .result-item.selected,
-body.light-mode .result-item:hover {
+body.theme-light .result-item.selected,
+body.theme-light .result-item:hover {
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-body.light-mode .result-item.selected {
+body.theme-light .result-item.selected {
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.05),
     0 1px 0 rgba(255, 255, 255, 0.8) inset;
@@ -481,7 +517,7 @@ body.light-mode .result-item.selected {
   border: 1px solid var(--border-color);
 }
 
-body.light-mode .result-icon {
+body.theme-light .result-icon {
   background: rgba(0, 0, 0, 0.04);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(255, 255, 255, 0.8) inset;
 }
@@ -558,7 +594,7 @@ body.light-mode .result-icon {
     0 1px 1px rgba(255, 255, 255, 0.15) inset;
 }
 
-body.light-mode .ai-chat-card {
+body.theme-light .ai-chat-card {
   background: rgba(255, 255, 255, 0.7);
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.06),
@@ -623,7 +659,7 @@ body.light-mode .ai-chat-card {
   border: 1px solid var(--border-color);
 }
 
-body.light-mode .ai-text pre {
+body.theme-light .ai-text pre {
   background: rgba(0, 0, 0, 0.05);
 }
 
@@ -637,7 +673,7 @@ body.light-mode .ai-text pre {
   color: var(--accent-hover);
 }
 
-body.light-mode .ai-text code {
+body.theme-light .ai-text code {
   background: rgba(0, 0, 0, 0.08);
   color: var(--accent);
 }
@@ -665,7 +701,7 @@ body.light-mode .ai-text code {
   color: #fff;
 }
 
-body.light-mode .ai-text strong {
+body.theme-light .ai-text strong {
   color: #000;
 }
 
@@ -698,7 +734,7 @@ body.light-mode .ai-text strong {
   color: var(--text-main);
 }
 
-body.light-mode .ai-copy-btn:hover {
+body.theme-light .ai-copy-btn:hover {
   background: rgba(0, 0, 0, 0.08);
 }
 
@@ -788,7 +824,7 @@ body.light-mode .ai-copy-btn:hover {
   gap: 18px;
 }
 
-body.light-mode .footer {
+body.theme-light .footer {
   background: rgba(255, 255, 255, 0.4);
 }
 
@@ -818,7 +854,7 @@ kbd {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) inset;
 }
 
-body.light-mode kbd {
+body.theme-light kbd {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1) inset;
 }
 
@@ -851,7 +887,7 @@ body.light-mode kbd {
   }
 }
 
-body.light-mode .settings-overlay {
+body.theme-light .settings-overlay {
   background: rgba(255, 255, 255, 0.6);
 }
 
@@ -887,7 +923,7 @@ body.light-mode .settings-overlay {
   color: var(--text-main);
 }
 
-body.light-mode .close-settings:hover {
+body.theme-light .close-settings:hover {
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -943,8 +979,8 @@ body.light-mode .close-settings:hover {
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 
-body.light-mode .text-input,
-body.light-mode .select-input {
+body.theme-light .text-input,
+body.theme-light .select-input {
   background: rgba(255, 255, 255, 0.6);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) inset;
 }
@@ -956,8 +992,8 @@ body.light-mode .select-input {
   box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1) inset;
 }
 
-body.light-mode .text-input:focus,
-body.light-mode .select-input:focus {
+body.theme-light .text-input:focus,
+body.theme-light .select-input:focus {
   background: rgba(255, 255, 255, 1);
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.05) inset;
 }

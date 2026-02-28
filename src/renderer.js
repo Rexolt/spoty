@@ -28,6 +28,8 @@ const setOpenaiModel = document.getElementById('set-openai-model');
 const geminiSettingsBlock = document.getElementById('gemini-settings-block');
 const setGeminiApiKey = document.getElementById('set-gemini-api-key');
 const setGeminiModel = document.getElementById('set-gemini-model');
+const setLanguage = document.getElementById('set-language');
+const setTheme = document.getElementById('set-theme');
 
 let currentResults = [];
 let selectedIndex = -1;
@@ -35,11 +37,132 @@ let searchTimeout = null;
 let appSettings = null;
 let isAiMode = false;
 
+// --- i18n Dictionary ---
+const i18n = {
+  hu: {
+    tab_search: "Keresés",
+    tab_ai: "AI Mód",
+    search_placeholder: "Keresés alkalmazások, fájlok, parancsok között...",
+    ai_placeholder: "Kérdezz bármit az AI-tól...",
+    footer_open: "Megnyitás",
+    footer_folder: "Mappa",
+    footer_nav: "Navigáció",
+    footer_close: "Bezárás",
+    settings_title: "Beállítások",
+    settings_general: "Általános",
+    settings_lang: "Nyelv",
+    settings_theme: "Téma",
+    theme_dark: "Sötét",
+    theme_light: "Világos",
+    theme_ocean: "Óceán",
+    theme_forest: "Erdő",
+    theme_midnight: "Éjfél (OLED)",
+    settings_hotkey: "Gyorsbillentyű",
+    settings_modules: "Keresés & Modulok",
+    settings_files: "Fájlok keresése",
+    settings_web: "Webes Keresés (g vagy ?)",
+    settings_sys: "Rendszer Parancsok (lock, sleep...)",
+    settings_calc: "Számológép",
+    settings_clip: "Vágólap (clip)",
+    settings_max: "Max találatok száma",
+    settings_ai: "AI Mód",
+    settings_provider: "Szolgáltató",
+    settings_openai_key: "OpenAI API Kulcs",
+    settings_gemini_key: "Gemini API Kulcs",
+    settings_model: "Modell",
+    settings_save: "Mentés",
+    no_results: "Nincs találat a következőre:"
+  },
+  en: {
+    tab_search: "Search",
+    tab_ai: "AI Mode",
+    search_placeholder: "Search for apps, files, commands...",
+    ai_placeholder: "Ask the AI anything...",
+    footer_open: "Open",
+    footer_folder: "Folder",
+    footer_nav: "Navigation",
+    footer_close: "Close",
+    settings_title: "Settings",
+    settings_general: "General",
+    settings_lang: "Language",
+    settings_theme: "Theme",
+    theme_dark: "Dark",
+    theme_light: "Light",
+    theme_ocean: "Ocean",
+    theme_forest: "Forest",
+    theme_midnight: "Midnight (OLED)",
+    settings_hotkey: "Hotkey",
+    settings_modules: "Search & Modules",
+    settings_files: "Search Files",
+    settings_web: "Web Search (g or ?)",
+    settings_sys: "System Commands (lock, sleep...)",
+    settings_calc: "Calculator",
+    settings_clip: "Clipboard (clip)",
+    settings_max: "Max Results",
+    settings_ai: "AI Mode",
+    settings_provider: "Provider",
+    settings_openai_key: "OpenAI API Key",
+    settings_gemini_key: "Gemini API Key",
+    settings_model: "Model",
+    settings_save: "Save",
+    no_results: "No results for:"
+  }
+};
+
+function translateUI(lang) {
+  const dict = i18n[lang] || i18n['hu'];
+
+  // Update elements with data-i18n
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) {
+      el.textContent = dict[key];
+    }
+  });
+
+  // Update elements with data-i18n-placeholder
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (dict[key]) {
+      el.placeholder = dict[key];
+    }
+  });
+
+  // Dynamically update search bar based on mode
+  if (isAiMode) {
+    searchInput.placeholder = dict.ai_placeholder;
+  } else {
+    searchInput.placeholder = dict.search_placeholder;
+  }
+}
+
+function applyTheme(theme) {
+  // Remove existing theme classes
+  document.body.classList.remove('theme-dark', 'theme-light', 'theme-ocean', 'theme-forest', 'theme-midnight');
+
+  // To keep backward compatibility with explicit styling if needed, though light mode is just a theme here
+  if (theme === 'light') {
+    document.body.classList.add('light-mode');
+  } else {
+    document.body.classList.remove('light-mode');
+  }
+
+  document.body.classList.add(`theme-${theme}`);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   searchInput.focus();
 
   // Load initial settings
   appSettings = await window.electron.invoke('get-settings');
+
+  // Set Language and Theme
+  const lang = appSettings.language || 'hu';
+  const theme = appSettings.theme || 'dark';
+
+  translateUI(lang);
+  applyTheme(theme);
+
   populateSettingsUI(appSettings);
 
   setupEventListeners();
@@ -107,14 +230,14 @@ function switchMode(mode) {
     tabPill.classList.remove('origin-left');
     tabPill.classList.add('origin-right');
     document.body.classList.add('ai-mode');
-    searchInput.placeholder = "Kérdezz bármit az AI-tól...";
+    searchInput.placeholder = (i18n[appSettings?.language || 'hu']).ai_placeholder;
   } else {
     btnAi.classList.remove('active');
     btnNormal.classList.add('active');
     tabPill.classList.remove('origin-right');
     tabPill.classList.add('origin-left');
     document.body.classList.remove('ai-mode');
-    searchInput.placeholder = "Keresés alkalmazások, fájlok, parancsok között...";
+    searchInput.placeholder = (i18n[appSettings?.language || 'hu']).search_placeholder;
   }
 
   clearSearch();
@@ -133,6 +256,8 @@ function hideSettings() {
 
 function populateSettingsUI(config) {
   if (!config) return;
+  if (setLanguage) setLanguage.value = config.language || 'hu';
+  if (setTheme) setTheme.value = config.theme || 'dark';
   if (setHotkey) setHotkey.value = config.hotkey || 'Alt+Space';
   setEnableFiles.checked = config.search.enableFiles !== false;
   if (setEnableWeb) setEnableWeb.checked = config.search.enableWebSearch !== false;
@@ -154,6 +279,8 @@ function populateSettingsUI(config) {
 
 function saveSettings() {
   const newSettings = {
+    language: setLanguage ? setLanguage.value : 'hu',
+    theme: setTheme ? setTheme.value : 'dark',
     hotkey: setHotkey ? setHotkey.value : 'Alt+Space',
     enableFiles: setEnableFiles.checked,
     enableWebSearch: setEnableWeb ? setEnableWeb.checked : true,
@@ -171,6 +298,8 @@ function saveSettings() {
   };
 
   window.electron.send('save-settings', newSettings);
+  appSettings.language = newSettings.language;
+  appSettings.theme = newSettings.theme;
   appSettings.hotkey = newSettings.hotkey;
   appSettings.search.enableFiles = newSettings.enableFiles;
   appSettings.search.enableWebSearch = newSettings.enableWebSearch;
@@ -184,6 +313,10 @@ function saveSettings() {
   appSettings.ai.openaiModel = newSettings.ai.openaiModel;
   appSettings.ai.geminiApiKey = newSettings.ai.geminiApiKey;
   appSettings.ai.geminiModel = newSettings.ai.geminiModel;
+
+  // Apply immediately
+  translateUI(appSettings.language);
+  applyTheme(appSettings.theme);
 
   hideSettings();
 }
@@ -234,7 +367,7 @@ function renderResults(results) {
           <div class="no-results-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </div>
-          <div class="no-results-text">Nincs találat a következőre: "${escapeHtml(searchInput.value)}"</div>
+          <div class="no-results-text">${(i18n[appSettings?.language || 'hu']).no_results} "${escapeHtml(searchInput.value)}"</div>
         </div>
       `;
     }
