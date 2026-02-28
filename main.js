@@ -108,6 +108,7 @@ function createWindow() {
     y: Math.round(height / 3),
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: true,
@@ -190,29 +191,32 @@ async function searchApplications(query) {
   const apps = [];
 
   for (const dir of dirs) {
-    if (!fs.existsSync(dir)) continue;
+    try {
+      const files = await fs.promises.readdir(dir);
+      for (const file of files) {
+        if (!file.endsWith('.desktop')) continue;
 
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-      if (!file.endsWith('.desktop')) continue;
+        try {
+          const content = await fs.promises.readFile(path.join(dir, file), 'utf-8');
+          const name = content.match(/^Name=(.+)$/m)?.[1];
+          const icon = content.match(/^Icon=(.+)$/m)?.[1];
+          const comment = content.match(/^Comment=(.+)$/m)?.[1];
 
-      try {
-        const content = fs.readFileSync(path.join(dir, file), 'utf-8');
-        const name = content.match(/^Name=(.+)$/m)?.[1];
-        const icon = content.match(/^Icon=(.+)$/m)?.[1];
-        const comment = content.match(/^Comment=(.+)$/m)?.[1];
-
-        if (name) {
-          apps.push({
-            type: 'app',
-            name: name,
-            path: path.join(dir, file),
-            icon: icon || 'application',
-            description: comment || ''
-          });
+          if (name) {
+            apps.push({
+              type: 'app',
+              name: name,
+              path: path.join(dir, file),
+              icon: icon || 'application',
+              description: comment || ''
+            });
+          }
+        } catch (e) {
+          // Skip unreadable files
         }
-      } catch (e) {
       }
+    } catch (e) {
+      // Skip unreadable/missing directories
     }
   }
 
@@ -239,28 +243,27 @@ async function searchFiles(query) {
   const files = [];
 
   for (const searchPath of searchPaths) {
-    if (!fs.existsSync(searchPath)) continue;
-
     try {
-      const items = fs.readdirSync(searchPath);
+      const items = await fs.promises.readdir(searchPath);
       for (const item of items) {
         if (item.toLowerCase().includes(query.toLowerCase())) {
           files.push({
             type: 'file',
             name: item,
             path: path.join(searchPath, item),
-            description: searchPath.split('/').pop()
+            description: `Fájl • ${path.basename(searchPath)} mappában`
           });
         }
       }
     } catch (e) {
+      // Skip missing/unreadable directories
     }
   }
 
   return files;
 }
 
-function getIconPath(iconName) {
+async function getIconPath(iconName) {
   if (!iconName) return null;
 
   const iconDirs = [
@@ -272,8 +275,11 @@ function getIconPath(iconName) {
   for (const dir of iconDirs) {
     for (const ext of ['', '.png', '.svg', '.xpm']) {
       const fullPath = path.join(dir, iconName + ext);
-      if (fs.existsSync(fullPath)) {
+      try {
+        await fs.promises.access(fullPath, fs.constants.R_OK);
         return fullPath;
+      } catch (e) {
+        // Not found or not readable
       }
     }
   }
@@ -323,6 +329,11 @@ app.whenReady().then(() => {
     hideWindow();
   });
 
+  ipcMain.on('item-show-folder', (_, itemPath) => {
+    shell.showItemInFolder(itemPath);
+    hideWindow();
+  });
+
   ipcMain.on('url-open', (_, url) => {
     shell.openExternal(url);
     hideWindow();
@@ -365,13 +376,13 @@ app.whenReady().then(() => {
       }
     }
     // System commands checking
-    else if (config.search.enableSysCommands && ['lock', 'sleep', 'shutdown', 'restart'].includes(query.toLowerCase())) {
+    else if (config.search.enableSysCommands && ['lock', 'sleep', 'shutdown', 'restart', 'zár', 'alvás', 'leállítás', 'újraindítás', 'kikapcs'].includes(query.toLowerCase())) {
       const q = query.toLowerCase();
       let cmdName = '', cmdAction = '';
-      if (q === 'lock') { cmdName = 'Képernyő zárolása'; cmdAction = 'xdg-screensaver lock'; }
-      if (q === 'sleep') { cmdName = 'Alvó mód'; cmdAction = 'systemctl suspend'; }
-      if (q === 'shutdown') { cmdName = 'Leállítás'; cmdAction = 'systemctl poweroff'; }
-      if (q === 'restart') { cmdName = 'Újraindítás'; cmdAction = 'systemctl reboot'; }
+      if (['lock', 'zár'].includes(q)) { cmdName = 'Képernyő zárolása'; cmdAction = 'xdg-screensaver lock'; }
+      if (['sleep', 'alvás'].includes(q)) { cmdName = 'Alvó mód'; cmdAction = 'systemctl suspend'; }
+      if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) { cmdName = 'Leállítás'; cmdAction = 'systemctl poweroff'; }
+      if (['restart', 'újraindítás'].includes(q)) { cmdName = 'Újraindítás'; cmdAction = 'systemctl reboot'; }
 
       results.push({
         type: 'syscommand',
@@ -381,7 +392,7 @@ app.whenReady().then(() => {
       });
     }
     // Calculator
-    else if (config.search.enableCalculator && /^[\d+\-*/().\s]+$/.test(query)) {
+    else if (config.search.enableCalculator && /^[\d+\-*/().\s%]+$/.test(query)) {
       try {
         const result = Function(`return ${query}`)();
         if (isFinite(result)) {
@@ -486,8 +497,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('get-icon', (_, iconName) => {
-    return getIconPath(iconName);
+  ipcMain.handle('get-icon', async (_, iconName) => {
+    return await getIconPath(iconName);
   });
 
   ipcMain.handle('get-settings', () => {
