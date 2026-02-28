@@ -13,8 +13,8 @@
     <div class="header">
       <div class="mode-tabs">
         <div class="tab-pill origin-left"></div>
-        <button class="mode-btn active" id="btn-normal">Keresés</button>
-        <button class="mode-btn" id="btn-ai">AI Mód</button>
+        <button class="mode-btn active" id="btn-normal" data-i18n="tab_search">Keresés</button>
+        <button class="mode-btn" id="btn-ai" data-i18n="tab_ai">AI Mód</button>
       </div>
       <button class="settings-btn" id="btn-settings" title="Beállítások">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -34,8 +34,8 @@
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
       </div>
-      <input id="search" type="text" placeholder="Keresés alkalmazások, fájlok, parancsok között..." autocomplete="off"
-        spellcheck="false">
+      <input id="search" type="text" data-i18n-placeholder="search_placeholder"
+        placeholder="Keresés alkalmazások, fájlok, parancsok között..." autocomplete="off" spellcheck="false">
       <button id="clear-btn" style="display: none;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">
@@ -51,23 +51,23 @@
 
     <div class="footer" id="footer" style="display: none;">
       <div class="footer-hint">
-        <kbd>↵</kbd> <span>Megnyitás</span>
+        <kbd>↵</kbd> <span data-i18n="footer_open">Megnyitás</span>
       </div>
       <div class="footer-hint" title="Mappa megnyitása">
-        <kbd>⇧</kbd>+<kbd>↵</kbd> <span>Mappa</span>
+        <kbd>⇧</kbd>+<kbd>↵</kbd> <span data-i18n="footer_folder">Mappa</span>
       </div>
       <div class="footer-hint">
-        <kbd>↓</kbd> <kbd>↑</kbd> <span>Navigáció</span>
+        <kbd>↓</kbd> <kbd>↑</kbd> <span data-i18n="footer_nav">Navigáció</span>
       </div>
       <div class="footer-hint">
-        <kbd>esc</kbd> <span>Bezárás</span>
+        <kbd>esc</kbd> <span data-i18n="footer_close">Bezárás</span>
       </div>
     </div>
 
     <!-- Settings Overlay -->
     <div class="settings-overlay" id="settings-overlay" style="display: none;">
       <div class="settings-header">
-        <h3>Beállítások</h3>
+        <h3 data-i18n="settings_title">Beállítások</h3>
         <button class="close-settings" id="btn-close-settings">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -78,46 +78,63 @@
       </div>
       <div class="settings-content">
         <div class="setting-group">
-          <h4>Általános</h4>
+          <h4 data-i18n="settings_general">Általános</h4>
           <label class="setting-row">
-            <span>Gyorsbillentyű</span>
+            <span data-i18n="settings_lang">Nyelv</span>
+            <select id="set-language" class="select-input small" style="width: auto;">
+              <option value="hu">Magyar</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span data-i18n="settings_theme">Téma</span>
+            <select id="set-theme" class="select-input small" style="width: auto;">
+              <option value="dark" data-i18n="theme_dark">Sötét</option>
+              <option value="light" data-i18n="theme_light">Világos</option>
+              <option value="ocean" data-i18n="theme_ocean">Óceán</option>
+              <option value="forest" data-i18n="theme_forest">Erdő</option>
+              <option value="midnight" data-i18n="theme_midnight">Éjfél (OLED)</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span data-i18n="settings_hotkey">Gyorsbillentyű</span>
             <input type="text" id="set-hotkey" value="Alt+Space" class="text-input small" style="width: 120px;"
               spellcheck="false" title="Példa: Alt+Space, Super+Space">
           </label>
         </div>
 
         <div class="setting-group">
-          <h4>Keresés & Modulok</h4>
+          <h4 data-i18n="settings_modules">Keresés & Modulok</h4>
           <label class="setting-row">
-            <span>Fájlok keresése</span>
+            <span data-i18n="settings_files">Fájlok keresése</span>
             <input type="checkbox" id="set-enable-files" class="toggle-switch">
           </label>
           <label class="setting-row">
-            <span>Webes Keresés (g vagy ?)</span>
+            <span data-i18n="settings_web">Webes Keresés (g vagy ?)</span>
             <input type="checkbox" id="set-enable-web" class="toggle-switch">
           </label>
           <label class="setting-row">
-            <span>Rendszer Parancsok (lock, sleep...)</span>
+            <span data-i18n="settings_sys">Rendszer Parancsok (lock, sleep...)</span>
             <input type="checkbox" id="set-enable-sys" class="toggle-switch">
           </label>
           <label class="setting-row">
-            <span>Számológép</span>
+            <span data-i18n="settings_calc">Számológép</span>
             <input type="checkbox" id="set-enable-calc" class="toggle-switch">
           </label>
           <label class="setting-row">
-            <span>Vágólap (clip)</span>
+            <span data-i18n="settings_clip">Vágólap (clip)</span>
             <input type="checkbox" id="set-enable-clip" class="toggle-switch">
           </label>
           <label class="setting-row">
-            <span>Max találatok száma</span>
+            <span data-i18n="settings_max">Max találatok száma</span>
             <input type="number" id="set-max-results" min="1" max="20" value="8" class="text-input small">
           </label>
         </div>
 
         <div class="setting-group">
-          <h4>AI Mód</h4>
+          <h4 data-i18n="settings_ai">AI Mód</h4>
           <label class="setting-row">
-            <span>Szolgáltató</span>
+            <span data-i18n="settings_provider">Szolgáltató</span>
             <select id="set-ai-provider" class="select-input">
               <option value="openai">OpenAI (ChatGPT)</option>
               <option value="gemini">Google Gemini</option>
@@ -127,11 +144,11 @@
           <!-- OpenAI Settings -->
           <div id="openai-settings-block">
             <label class="setting-row vertical">
-              <span>OpenAI API Kulcs</span>
+              <span data-i18n="settings_openai_key">OpenAI API Kulcs</span>
               <input type="password" id="set-openai-api-key" placeholder="sk-..." class="text-input" spellcheck="false">
             </label>
             <label class="setting-row">
-              <span>Modell</span>
+              <span data-i18n="settings_model">Modell</span>
               <select id="set-openai-model" class="select-input">
                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                 <option value="gpt-4o">GPT-4o</option>
@@ -142,12 +159,12 @@
           <!-- Gemini Settings -->
           <div id="gemini-settings-block" style="display: none;">
             <label class="setting-row vertical">
-              <span>Gemini API Kulcs</span>
+              <span data-i18n="settings_gemini_key">Gemini API Kulcs</span>
               <input type="password" id="set-gemini-api-key" placeholder="AIzaSy..." class="text-input"
                 spellcheck="false">
             </label>
             <label class="setting-row">
-              <span>Modell</span>
+              <span data-i18n="settings_model">Modell</span>
               <select id="set-gemini-model" class="select-input">
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -157,7 +174,7 @@
         </div>
       </div>
       <div class="settings-footer">
-        <button id="btn-save-settings" class="primary-btn">Mentés</button>
+        <button id="btn-save-settings" class="primary-btn" data-i18n="settings_save">Mentés</button>
       </div>
     </div>
 
