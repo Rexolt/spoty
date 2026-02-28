@@ -578,6 +578,35 @@ body.theme-light .result-icon {
   border-color: transparent;
 }
 
+/* Weather Card Custom Styling */
+.weather-card {
+  padding: 14px 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-left: 3px solid #64B5F6;
+  margin-bottom: 8px;
+}
+
+body.theme-light .weather-card {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.01) 100%);
+  border-left: 3px solid #2196F3;
+}
+
+.weather-card .result-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.weather-card .result-icon {
+  width: 42px;
+  height: 42px;
+  font-size: 28px;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  margin-right: 4px;
+}
+
 /* -- AI CHAT BUBBLES -- */
 .ai-chat-card {
   display: flex;
