@@ -1,15 +1,27 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const validSendChannels = [
+  'window-hide', 'window-resize', 'app-launch', 'item-show-folder',
+  'url-open', 'clipboard-copy', 'command-run', 'alias-run', 'save-settings'
+];
+const validInvokeChannels = ['search', 'ask-ai', 'get-icon', 'get-settings'];
+const validOnChannels = ['window-show', 'window-hide'];
+
 contextBridge.exposeInMainWorld('electron', {
-  // Egyirányú kommunikáció: renderer -> main
   send: (channel, data) => {
-    ipcRenderer.send(channel, data);
+    if (validSendChannels.includes(channel)) {
+      ipcRenderer.send(channel, data);
+    }
   },
-  // Egyirányú kommunikáció: main -> renderer
   on: (channel, func) => {
-    ipcRenderer.on(channel, (event, ...args) => func(...args));
+    if (validOnChannels.includes(channel)) {
+      ipcRenderer.on(channel, (event, ...args) => func(...args));
+    }
   },
   invoke: (channel, data) => {
-    return ipcRenderer.invoke(channel, data);
+    if (validInvokeChannels.includes(channel)) {
+      return ipcRenderer.invoke(channel, data);
+    }
+    return Promise.reject(new Error(`Invalid channel: ${channel}`));
   }
 });

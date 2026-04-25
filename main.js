@@ -1,10 +1,15 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard } = require('electron');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const Fuse = require('fuse.js');
-const iconPath = path.join(__dirname, 'build', 'icons', '512x512.png');
+
+const isWindows = process.platform === 'win32';
+const isLinux = process.platform === 'linux';
+const isMac = process.platform === 'darwin';
+
+const iconPath = path.join(__dirname, 'build', 'icons', isWindows ? 'icon.ico' : '512x512.png');
 
 
 let mainWindow;
@@ -14,7 +19,9 @@ let clipboardHistory = [];
 let exchangeRates = null;
 let exchangeRatesTime = 0;
 
-const configPath = path.join(os.homedir(), '.config', 'spoty');
+const configPath = isWindows
+  ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'spoty')
+  : path.join(os.homedir(), '.config', 'spoty');
 const configFile = path.join(configPath, 'config.json');
 
 // Default config
@@ -218,40 +225,83 @@ function startClipboardMonitoring() {
 }
 
 async function searchApplications(query) {
-  const dirs = [
-    '/usr/share/applications',
-    path.join(os.homedir(), '.local/share/applications')
-  ];
-
   const apps = [];
 
-  for (const dir of dirs) {
-    try {
-      const files = await fs.promises.readdir(dir);
-      for (const file of files) {
-        if (!file.endsWith('.desktop')) continue;
+  if (isWindows) {
+    // Windows: scan Start Menu for .lnk files
+    const startMenuDirs = [
+      path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+      path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+    ];
 
-        try {
-          const content = await fs.promises.readFile(path.join(dir, file), 'utf-8');
-          const name = content.match(/^Name=(.+)$/m)?.[1];
-          const icon = content.match(/^Icon=(.+)$/m)?.[1];
-          const comment = content.match(/^Comment=(.+)$/m)?.[1];
-
-          if (name) {
+    async function scanDir(dir, depth = 0) {
+      if (depth > 3) return;
+      try {
+        const items = await fs.promises.readdir(dir, { withFileTypes: true });
+        for (const item of items) {
+          const fullPath = path.join(dir, item.name);
+          if (item.isDirectory()) {
+            await scanDir(fullPath, depth + 1);
+          } else if (item.name.toLowerCase().endsWith('.lnk')) {
             apps.push({
               type: 'app',
-              name: name,
-              path: path.join(dir, file),
-              icon: icon || 'application',
-              description: comment || ''
+              name: item.name.replace(/\.lnk$/i, ''),
+              path: fullPath,
+              icon: 'application',
+              description: ''
             });
           }
-        } catch (e) {
-          // Skip unreadable files
         }
+      } catch (e) {
+        // Skip unreadable directories
       }
-    } catch (e) {
-      // Skip unreadable/missing directories
+    }
+
+    for (const dir of startMenuDirs) {
+      await scanDir(dir);
+    }
+  } else {
+    // Linux: scan .desktop files
+    const dirs = [
+      '/usr/share/applications',
+      path.join(os.homedir(), '.local/share/applications'),
+      '/var/lib/flatpak/exports/share/applications',
+      path.join(os.homedir(), '.local/share/flatpak/exports/share/applications')
+    ];
+
+    for (const dir of dirs) {
+      try {
+        const files = await fs.promises.readdir(dir);
+        for (const file of files) {
+          if (!file.endsWith('.desktop')) continue;
+
+          try {
+            const content = await fs.promises.readFile(path.join(dir, file), 'utf-8');
+
+            // Skip hidden/non-display entries
+            if (/^NoDisplay=true$/m.test(content)) continue;
+            if (/^Hidden=true$/m.test(content)) continue;
+
+            const name = content.match(/^Name=(.+)$/m)?.[1];
+            const icon = content.match(/^Icon=(.+)$/m)?.[1];
+            const comment = content.match(/^Comment=(.+)$/m)?.[1];
+
+            if (name) {
+              apps.push({
+                type: 'app',
+                name: name,
+                path: path.join(dir, file),
+                icon: icon || 'application',
+                description: comment || ''
+              });
+            }
+          } catch (e) {
+            // Skip unreadable files
+          }
+        }
+      } catch (e) {
+        // Skip unreadable/missing directories
+      }
     }
   }
 
@@ -270,10 +320,16 @@ async function searchApplications(query) {
 async function searchBookmarks(query) {
   if (!config.search.enableBookmarks || query.length < 2) return [];
 
-  const bookmarkPaths = [
+  const bookmarkPaths = isWindows ? [
+    path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'User Data', 'Default', 'Bookmarks'),
+    path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default', 'Bookmarks'),
+    path.join(process.env.LOCALAPPDATA || '', 'Chromium', 'User Data', 'Default', 'Bookmarks'),
+    path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'User Data', 'Default', 'Bookmarks')
+  ] : [
     path.join(os.homedir(), '.config', 'google-chrome', 'Default', 'Bookmarks'),
     path.join(os.homedir(), '.config', 'BraveSoftware', 'Brave-Browser', 'Default', 'Bookmarks'),
-    path.join(os.homedir(), '.config', 'chromium', 'Default', 'Bookmarks')
+    path.join(os.homedir(), '.config', 'chromium', 'Default', 'Bookmarks'),
+    path.join(os.homedir(), '.config', 'microsoft-edge', 'Default', 'Bookmarks')
   ];
 
   const results = [];
@@ -334,6 +390,26 @@ async function searchFiles(query) {
     path.join(os.homedir(), 'Downloads')
   ];
 
+  // XDG user directories on Linux (e.g. localized folder names)
+  if (isLinux) {
+    try {
+      const xdgConfig = path.join(os.homedir(), '.config', 'user-dirs.dirs');
+      if (fs.existsSync(xdgConfig)) {
+        const content = fs.readFileSync(xdgConfig, 'utf-8');
+        const xdgDirs = ['XDG_DESKTOP_DIR', 'XDG_DOCUMENTS_DIR', 'XDG_DOWNLOAD_DIR'];
+        for (const key of xdgDirs) {
+          const match = content.match(new RegExp(`^${key}="(.+)"`, 'm'));
+          if (match) {
+            const resolved = match[1].replace('$HOME', os.homedir());
+            if (!searchPaths.includes(resolved)) searchPaths.push(resolved);
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore XDG parsing errors
+    }
+  }
+
   const files = [];
 
   for (const searchPath of searchPaths) {
@@ -360,10 +436,25 @@ async function searchFiles(query) {
 async function getIconPath(iconName) {
   if (!iconName) return null;
 
+  // Icon resolution is Linux-specific; Windows uses shell integration
+  if (isWindows) return null;
+
+  // If it's already an absolute path, verify it exists
+  if (path.isAbsolute(iconName)) {
+    try {
+      await fs.promises.access(iconName, fs.constants.R_OK);
+      return iconName;
+    } catch (e) {
+      return null;
+    }
+  }
+
   const iconDirs = [
     '/usr/share/pixmaps',
     '/usr/share/icons/hicolor/48x48/apps',
-    '/usr/share/icons/hicolor/scalable/apps'
+    '/usr/share/icons/hicolor/scalable/apps',
+    '/usr/share/icons/hicolor/128x128/apps',
+    '/usr/share/icons/hicolor/256x256/apps'
   ];
 
   for (const dir of iconDirs) {
@@ -415,8 +506,14 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('app-launch', (_, appPath) => {
-    if (appPath.endsWith('.desktop')) {
-      exec(`gtk-launch ${path.basename(appPath, '.desktop')}`);
+    if (isLinux && appPath.endsWith('.desktop')) {
+      // Use gio launch (Wayland-compatible), fallback to gtk-launch
+      execFile('gio', ['launch', appPath], (err) => {
+        if (err) {
+          const appName = path.basename(appPath, '.desktop');
+          execFile('gtk-launch', [appName]);
+        }
+      });
     } else {
       shell.openPath(appPath);
     }
@@ -465,7 +562,8 @@ app.whenReady().then(() => {
         const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, { signal: AbortSignal.timeout(3000) });
         if (res.ok) {
           const data = await res.json();
-          const current = data.current_condition[0];
+          const current = data?.current_condition?.[0];
+          if (!current) throw new Error('Unexpected weather data');
           results.push({
             type: 'weather',
             name: `${city.charAt(0).toUpperCase() + city.slice(1)}`,
@@ -521,10 +619,17 @@ app.whenReady().then(() => {
     else if (config.search.enableSysCommands && ['lock', 'sleep', 'shutdown', 'restart', 'zár', 'alvás', 'leállítás', 'újraindítás', 'kikapcs'].includes(query.toLowerCase())) {
       const q = query.toLowerCase();
       let cmdName = '', cmdAction = '';
-      if (['lock', 'zár'].includes(q)) { cmdName = 'Képernyő zárolása'; cmdAction = 'xdg-screensaver lock'; }
-      if (['sleep', 'alvás'].includes(q)) { cmdName = 'Alvó mód'; cmdAction = 'systemctl suspend'; }
-      if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) { cmdName = 'Leállítás'; cmdAction = 'systemctl poweroff'; }
-      if (['restart', 'újraindítás'].includes(q)) { cmdName = 'Újraindítás'; cmdAction = 'systemctl reboot'; }
+      if (isWindows) {
+        if (['lock', 'zár'].includes(q)) { cmdName = 'Lock Screen'; cmdAction = 'rundll32.exe user32.dll,LockWorkStation'; }
+        if (['sleep', 'alvás'].includes(q)) { cmdName = 'Sleep'; cmdAction = 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0'; }
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) { cmdName = 'Shutdown'; cmdAction = 'shutdown /s /t 0'; }
+        if (['restart', 'újraindítás'].includes(q)) { cmdName = 'Restart'; cmdAction = 'shutdown /r /t 0'; }
+      } else {
+        if (['lock', 'zár'].includes(q)) { cmdName = 'Képernyő zárolása'; cmdAction = 'loginctl lock-session'; }
+        if (['sleep', 'alvás'].includes(q)) { cmdName = 'Alvó mód'; cmdAction = 'systemctl suspend'; }
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) { cmdName = 'Leállítás'; cmdAction = 'systemctl poweroff'; }
+        if (['restart', 'újraindítás'].includes(q)) { cmdName = 'Újraindítás'; cmdAction = 'systemctl reboot'; }
+      }
 
       results.push({
         type: 'syscommand',
@@ -731,7 +836,11 @@ app.whenReady().then(() => {
 
   ipcMain.on('save-settings', (_, newSettings) => {
     config.hotkey = newSettings.hotkey || config.hotkey;
+    config.language = newSettings.language || config.language;
+    config.theme = newSettings.theme || config.theme;
+    if (newSettings.aliases !== undefined) config.aliases = newSettings.aliases;
     config.search.enableFiles = newSettings.enableFiles !== undefined ? newSettings.enableFiles : config.search.enableFiles;
+    config.search.enableBookmarks = newSettings.enableBookmarks !== undefined ? newSettings.enableBookmarks : config.search.enableBookmarks;
     config.search.enableWebSearch = newSettings.enableWebSearch !== undefined ? newSettings.enableWebSearch : config.search.enableWebSearch;
     config.search.enableSysCommands = newSettings.enableSysCommands !== undefined ? newSettings.enableSysCommands : config.search.enableSysCommands;
     config.search.enableCalculator = newSettings.enableCalculator !== undefined ? newSettings.enableCalculator : config.search.enableCalculator;
@@ -743,6 +852,8 @@ app.whenReady().then(() => {
       config.ai.openaiModel = newSettings.ai.openaiModel || config.ai.openaiModel;
       config.ai.geminiApiKey = newSettings.ai.geminiApiKey !== undefined ? newSettings.ai.geminiApiKey : config.ai.geminiApiKey;
       config.ai.geminiModel = newSettings.ai.geminiModel || config.ai.geminiModel;
+      config.ai.ollamaUrl = newSettings.ai.ollamaUrl || config.ai.ollamaUrl;
+      config.ai.ollamaModel = newSettings.ai.ollamaModel || config.ai.ollamaModel;
     }
     saveConfig();
     registerHotkey();

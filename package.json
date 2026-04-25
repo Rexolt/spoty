@@ -1,22 +1,30 @@
 {
   "name": "spoty",
-  "version": "3.0.0",
-  "description": "Modern Spotlight-like search app for Linux",
+  "version": "3.1.0",
+  "description": "Modern Spotlight-like search & launcher app for Windows and Linux",
   "main": "main.js",
   "homepage": "https://github.com/Rexolt/spoty",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rexolt/spoty.git"
+  },
   "author": {
     "name": "Rexolt",
     "email": "c1e3x5eu@anonaddy.me"
   },
+  "keywords": ["spotlight", "launcher", "search", "electron", "desktop"],
   "scripts": {
-    "start": "LIBVA_DRIVER_NAME=nvidia electron . --disable-gpu --no-sandbox",
+    "start": "electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "build": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --linux --win"
   },
   "build": {
-    "appId": "com.lqface.spoty",
-    "productName": "Linux Spotlight",
+    "appId": "com.rexolt.spoty",
+    "productName": "Spoty",
     "files": [
       "main.js",
       "preload.js",
@@ -27,22 +35,35 @@
       "target": [
         "AppImage",
         "deb",
-        "rpm"
+        "rpm",
+        "pacman"
       ],
       "icon": "build/icons",
       "category": "Utility",
       "desktop": {
         "Name": "Spoty",
-        "Comment": "Modern Spotlight-szerű kereső Linuxra",
+        "Comment": "Modern Spotlight-like search & launcher",
         "Keywords": "search;launcher;spotlight;lookup;"
       }
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
     }
   },
   "dependencies": {
     "fuse.js": "^6.6.2"
   },
   "devDependencies": {
-    "electron": "^25.0.0",
-    "electron-builder": "^23.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0"
   }
 }

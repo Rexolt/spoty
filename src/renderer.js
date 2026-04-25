@@ -80,7 +80,20 @@ const i18n = {
     settings_ollama_url: "Ollama URL",
     settings_model: "Modell",
     settings_save: "Mentés",
-    no_results: "Nincs találat a következőre:"
+    no_results: "Nincs találat a következőre:",
+    type_app: "Alkalmazás",
+    type_command: "Parancs",
+    type_syscommand: "Rendszer Parancs",
+    type_alias: "Gyorsparancs (Alias)",
+    type_weather: "Időjárás",
+    type_web: "Web Keresés",
+    type_calc: "Kalkulátor",
+    type_clipboard: "Vágólap",
+    type_file: "Fájl",
+    type_default: "Találat",
+    copy: "Másolás",
+    copied: "Másolva!",
+    ai_error: "Hiba történt"
   },
   en: {
     tab_search: "Search",
@@ -118,7 +131,20 @@ const i18n = {
     settings_ollama_url: "Ollama URL",
     settings_model: "Model",
     settings_save: "Save",
-    no_results: "No results for:"
+    no_results: "No results for:",
+    type_app: "Application",
+    type_command: "Command",
+    type_syscommand: "System Command",
+    type_alias: "Shortcut (Alias)",
+    type_weather: "Weather",
+    type_web: "Web Search",
+    type_calc: "Calculator",
+    type_clipboard: "Clipboard",
+    type_file: "File",
+    type_default: "Result",
+    copy: "Copy",
+    copied: "Copied!",
+    ai_error: "Error occurred"
   }
 };
 
@@ -447,7 +473,8 @@ async function startAiChat(query) {
     const reply = await window.electron.invoke('ask-ai', query);
     renderAiReply(reply);
   } catch (err) {
-    renderAiReply(`Hiba történt: ${err.message}`, true);
+    const errorDict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
+    renderAiReply(`${errorDict.ai_error}: ${err.message}`, true);
   }
 }
 
@@ -470,7 +497,7 @@ function renderAiReply(text, isError = false) {
         <div class="ai-text">${htmlText}</div>
         ${!isError ? `
         <button class="ai-copy-btn" onclick="copyAiText(this)" data-text="${escapeHtml(text)}">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Másolás
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> ${(i18n[appSettings?.language || 'hu'] || i18n['hu']).copy}
         </button>
         ` : ''}
       </div>
@@ -483,7 +510,8 @@ window.copyAiText = function (btn) {
   const text = btn.getAttribute('data-text');
   window.electron.send('clipboard-copy', text);
   const originalHtml = btn.innerHTML;
-  btn.innerHTML = 'Másolva!';
+  const copiedDict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
+  btn.innerHTML = copiedDict.copied;
   setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
 }
 
@@ -555,18 +583,20 @@ function createResultElement(item, index) {
     content.appendChild(desc);
   }
 
+  const lang = appSettings?.language || 'hu';
+  const dict = i18n[lang] || i18n['hu'];
   let typeLabel = '';
   switch (item.type) {
-    case 'app': typeLabel = 'Alkalmazás'; break;
-    case 'command': typeLabel = 'Parancs'; break;
-    case 'syscommand': typeLabel = 'Rendszer Parancs'; break;
-    case 'alias': typeLabel = 'Gyorsparancs (Alias)'; break;
-    case 'weather': typeLabel = 'Időjárás'; break;
-    case 'web': typeLabel = 'Web Keresés'; break;
-    case 'calc': typeLabel = 'Kalkulátor'; break;
-    case 'clipboard': typeLabel = 'Vágólap'; break;
-    case 'file': typeLabel = 'Fájl'; break;
-    default: typeLabel = 'Találat'; break;
+    case 'app': typeLabel = dict.type_app; break;
+    case 'command': typeLabel = dict.type_command; break;
+    case 'syscommand': typeLabel = dict.type_syscommand; break;
+    case 'alias': typeLabel = dict.type_alias; break;
+    case 'weather': typeLabel = dict.type_weather; break;
+    case 'web': typeLabel = dict.type_web; break;
+    case 'calc': typeLabel = dict.type_calc; break;
+    case 'clipboard': typeLabel = dict.type_clipboard; break;
+    case 'file': typeLabel = dict.type_file; break;
+    default: typeLabel = dict.type_default; break;
   }
 
   const badge = document.createElement('div');

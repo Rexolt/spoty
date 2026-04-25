@@ -1,7 +1,14 @@
 node_modules/
 dist/
-build/
 .env
 .idea/
 .vscode/
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+out/
+release/
 test-models.js
