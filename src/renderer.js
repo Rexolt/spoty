@@ -15,6 +15,7 @@ const btnCloseSettings = document.getElementById('btn-close-settings');
 const btnSaveSettings = document.getElementById('btn-save-settings');
 
 const setHotkey = document.getElementById('set-hotkey');
+const setAutoLaunch = document.getElementById('set-autolaunch');
 const setEnableFiles = document.getElementById('set-enable-files');
 const setEnableBookmarks = document.getElementById('set-enable-bookmarks');
 const setEnableWeb = document.getElementById('set-enable-web');
@@ -63,6 +64,7 @@ const i18n = {
     theme_forest: "Erdő",
     theme_midnight: "Éjfél (OLED)",
     settings_hotkey: "Gyorsbillentyű",
+    settings_autolaunch: "Indítás a rendszerrel",
     settings_modules: "Keresés & Modulok",
     settings_files: "Fájlok keresése",
     settings_bookmarks: "Könyvjelzők keresése",
@@ -114,6 +116,7 @@ const i18n = {
     theme_forest: "Forest",
     theme_midnight: "Midnight (OLED)",
     settings_hotkey: "Hotkey",
+    settings_autolaunch: "Start with system",
     settings_modules: "Search & Modules",
     settings_files: "Search Files",
     settings_bookmarks: "Search Bookmarks",
@@ -302,6 +305,7 @@ function populateSettingsUI(config) {
   if (setLanguage) setLanguage.value = config.language || 'hu';
   if (setTheme) setTheme.value = config.theme || 'dark';
   if (setHotkey) setHotkey.value = config.hotkey || 'Alt+Space';
+  if (setAutoLaunch) setAutoLaunch.checked = config.autoLaunch === true;
   setEnableFiles.checked = config.search.enableFiles !== false;
   if (setEnableBookmarks) setEnableBookmarks.checked = config.search.enableBookmarks !== false;
   if (setEnableWeb) setEnableWeb.checked = config.search.enableWebSearch !== false;
@@ -339,6 +343,7 @@ function saveSettings() {
     theme: setTheme ? setTheme.value : 'dark',
     hotkey: setHotkey ? setHotkey.value : 'Alt+Space',
     aliases: parsedAliases,
+    autoLaunch: setAutoLaunch ? setAutoLaunch.checked : false,
     enableFiles: setEnableFiles.checked,
     enableBookmarks: setEnableBookmarks ? setEnableBookmarks.checked : true,
     enableWebSearch: setEnableWeb ? setEnableWeb.checked : true,
@@ -362,6 +367,7 @@ function saveSettings() {
   appSettings.theme = newSettings.theme;
   appSettings.hotkey = newSettings.hotkey;
   appSettings.aliases = newSettings.aliases;
+  appSettings.autoLaunch = newSettings.autoLaunch;
   appSettings.search.enableFiles = newSettings.enableFiles;
   appSettings.search.enableBookmarks = newSettings.enableBookmarks;
   appSettings.search.enableWebSearch = newSettings.enableWebSearch;
