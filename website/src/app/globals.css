@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  /* Original Project Colors */
+  --background: #0d0d0f; /* Slightly darker than rgba(26,26,29) for better contrast on web */
+  --foreground: rgba(255, 255, 255, 0.95);
+  --accent: #0A84FF;
+  --accent-hover: #409CFF;
+  --text-muted: rgba(235, 235, 245, 0.6);
+  --border-color: rgba(255, 255, 255, 0.12);
+  --selection-bg: rgba(255, 255, 255, 0.15);
+  --radius-main: 20px;
+  --radius-item: 12px;
+  --blur: 40px; /* Reduced for web performance/readability compared to 90px */
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  * {
+    @apply border-white/10;
+  }
+}
+
+/* Original Container Style */
+.spoty-container {
+  background: rgba(26, 26, 29, 0.75);
+  backdrop-filter: blur(var(--blur)) saturate(220%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(220%);
+  border-radius: var(--radius-main);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* Original Search Bar Style */
+.spoty-search-bar {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 14px;
+}
+
+/* Original Result Item Style */
+.spoty-result-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  margin: 4px 6px;
+  border-radius: var(--radius-item);
+  gap: 14px;
+  min-height: 54px;
+  transition: all 0.2s ease;
+}
+
+.spoty-result-item:hover {
+  background: var(--selection-bg);
+  backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #ffffff, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-radial-gradient {
+  background: radial-gradient(circle at center, rgba(10, 132, 255, 0.15) 0%, transparent 70%);
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
