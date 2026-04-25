@@ -52,7 +52,8 @@ let config = {
   aliases: {},
   theme: 'dark',
   language: 'hu',
-  hotkey: 'Alt+Space'
+  hotkey: 'Alt+Space',
+  autoLaunch: false
 };
 
 function loadConfig() {
@@ -68,6 +69,7 @@ function loadConfig() {
 
       // Ensure defaults for new properties if not present in loaded config
       if (config.hotkey === undefined) config.hotkey = 'Alt+Space';
+      if (config.autoLaunch === undefined) config.autoLaunch = false;
       if (config.theme === undefined) config.theme = 'dark';
       if (config.language === undefined) config.language = 'hu';
       if (config.search.enableBookmarks === undefined) config.search.enableBookmarks = true;
@@ -227,7 +229,28 @@ function startClipboardMonitoring() {
 async function searchApplications(query) {
   const apps = [];
 
-  if (isWindows) {
+  if (isMac) {
+    // macOS: scan /Applications for .app bundles
+    const appDirs = ['/Applications', path.join(os.homedir(), 'Applications')];
+    for (const dir of appDirs) {
+      try {
+        const items = await fs.promises.readdir(dir);
+        for (const item of items) {
+          if (item.endsWith('.app')) {
+            apps.push({
+              type: 'app',
+              name: item.replace('.app', ''),
+              path: path.join(dir, item),
+              icon: 'application',
+              description: ''
+            });
+          }
+        }
+      } catch (e) {
+        // Skip unreadable directories
+      }
+    }
+  } else if (isWindows) {
     // Windows: scan Start Menu for .lnk files
     const startMenuDirs = [
       path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -320,7 +343,12 @@ async function searchApplications(query) {
 async function searchBookmarks(query) {
   if (!config.search.enableBookmarks || query.length < 2) return [];
 
-  const bookmarkPaths = isWindows ? [
+  const bookmarkPaths = isMac ? [
+    path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Bookmarks'),
+    path.join(os.homedir(), 'Library', 'Application Support', 'BraveSoftware', 'Brave-Browser', 'Default', 'Bookmarks'),
+    path.join(os.homedir(), 'Library', 'Application Support', 'Chromium', 'Default', 'Bookmarks'),
+    path.join(os.homedir(), 'Library', 'Application Support', 'Microsoft Edge', 'Default', 'Bookmarks')
+  ] : isWindows ? [
     path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'User Data', 'Default', 'Bookmarks'),
     path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default', 'Bookmarks'),
     path.join(process.env.LOCALAPPDATA || '', 'Chromium', 'User Data', 'Default', 'Bookmarks'),
@@ -472,6 +500,13 @@ async function getIconPath(iconName) {
   return null;
 }
 
+function applyAutoLaunch(enabled) {
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    args: []
+  });
+}
+
 const HOTKEY_CANDIDATES = [
   'Alt+Space',
   'Super+Space',
@@ -564,6 +599,7 @@ app.whenReady().then(async () => {
   createWindow();
   startClipboardMonitoring();
   await registerHotkey();
+  applyAutoLaunch(config.autoLaunch === true);
 
   ipcMain.on('window-hide', hideWindow);
 
@@ -580,6 +616,8 @@ app.whenReady().then(async () => {
           execFile('gtk-launch', [appName]);
         }
       });
+    } else if (isMac && appPath.endsWith('.app')) {
+      execFile('open', [appPath]);
     } else {
       shell.openPath(appPath);
     }
@@ -904,6 +942,8 @@ app.whenReady().then(async () => {
     config.hotkey = newSettings.hotkey || config.hotkey;
     config.language = newSettings.language || config.language;
     config.theme = newSettings.theme || config.theme;
+    config.autoLaunch = newSettings.autoLaunch === true;
+    applyAutoLaunch(config.autoLaunch);
     if (newSettings.aliases !== undefined) config.aliases = newSettings.aliases;
     config.search.enableFiles = newSettings.enableFiles !== undefined ? newSettings.enableFiles : config.search.enableFiles;
     config.search.enableBookmarks = newSettings.enableBookmarks !== undefined ? newSettings.enableBookmarks : config.search.enableBookmarks;
@@ -931,5 +971,6 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', (e) => {
-  e.preventDefault();
+  // Keep the app running in the tray
+  if (!isMac) e.preventDefault();
 });

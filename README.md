@@ -1,6 +1,6 @@
 # Spoty
 
-A modern, Spotlight-like search & launcher application for **Windows** and **Linux** (Arch, Debian, Fedora, and more).
+A modern, Spotlight-like search & launcher application for **Windows**, **macOS** and **Linux** (Arch, Debian, Fedora, and more).
 
 Built with Electron. Fast, lightweight, and highly customizable.
 
@@ -50,6 +50,12 @@ sudo rpm -i spoty-*.rpm
 sudo pacman -U spoty-*.pacman
 ```
 
+### macOS
+
+Download the `.dmg` from [Releases](https://github.com/Rexolt/spoty/releases), open it and drag Spoty to Applications.
+
+> **Note:** The app is unsigned. On first launch, right-click → Open, then click Open in the dialog.
+
 ### Windows
 
 Download the `.exe` installer or the portable version from [Releases](https://github.com/Rexolt/spoty/releases).
@@ -81,6 +87,9 @@ npm start
 # Linux (AppImage, deb, rpm, pacman)
 npm run build:linux
 
+# macOS (dmg, zip — unsigned)
+npm run build:mac
+
 # Windows (NSIS installer, portable)
 npm run build:win
 
@@ -95,6 +104,7 @@ Output goes to the `dist/` directory.
 Config is stored at:
 
 - **Linux**: `~/.config/spoty/config.json`
+- **macOS**: `~/.config/spoty/config.json`
 - **Windows**: `%APPDATA%\spoty\config.json`
 
 All settings can be changed from the in-app Settings panel (gear icon).

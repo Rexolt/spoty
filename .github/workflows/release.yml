@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   build-linux:
+    strategy:
+      matrix:
+        arch: [x64, arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,22 +29,52 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Linux packages
-        run: npm run build:linux
+      - name: Build Linux packages (${{ matrix.arch }})
+        run: npx electron-builder --linux --${{ matrix.arch }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Linux artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-builds
+          name: linux-${{ matrix.arch }}
           path: |
             dist/*.AppImage
             dist/*.deb
             dist/*.rpm
             dist/*.pacman
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS packages (universal)
+        run: npx electron-builder --mac --universal
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: |
+            dist/*.dmg
+            dist/*.zip
+
   build-windows:
+    strategy:
+      matrix:
+        arch: [x64, arm64]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,46 +88,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Windows packages
-        run: npm run build:win
+      - name: Build Windows packages (${{ matrix.arch }})
+        run: npx electron-builder --win --${{ matrix.arch }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Windows artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-builds
-          path: |
-            dist/*.exe
+          name: windows-${{ matrix.arch }}
+          path: dist/*.exe
 
   release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Linux artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-builds
           path: dist
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-builds
-          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
           draft: false
-          files: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-            dist/*.pacman
-            dist/*.exe
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
