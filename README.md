@@ -18,7 +18,7 @@ Built with Electron. Fast, lightweight, and highly customizable.
 - **Custom aliases** — Define your own multi-action shortcuts
 - **Themes** — Dark, Light, Ocean, Forest, Midnight (OLED)
 - **Bilingual UI** — Hungarian & English
-
+ 
 ## Installation
 
 ### Linux
