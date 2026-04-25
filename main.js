@@ -501,10 +501,30 @@ async function getIconPath(iconName) {
 }
 
 function applyAutoLaunch(enabled) {
-  app.setLoginItemSettings({
-    openAtLogin: enabled,
-    args: []
-  });
+  if (isMac) {
+    // macOS requires signed apps for login items (SMAppService).
+    // Unsigned apps cannot use setLoginItemSettings reliably.
+    if (enabled && mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Spoty — Auto-launch',
+        message: config.language === 'hu'
+          ? 'A macOS-en az automatikus indításhoz kézzel kell hozzáadnod az alkalmazást:\n\nRendszerbeállítások → Általános → Bejelentkezési elemek → \"+\" gomb → válaszd ki a Spoty-t'
+          : 'On macOS, you need to add the app to login items manually:\n\nSystem Settings → General → Login Items → \"+\" button → select Spoty',
+        buttons: ['OK']
+      });
+    }
+    return;
+  }
+
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      args: []
+    });
+  } catch (err) {
+    console.warn('Failed to set login item:', err.message);
+  }
 }
 
 const HOTKEY_CANDIDATES = [
