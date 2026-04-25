@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, dialog } = require('electron');
 const path = require('path');
 const { exec, execFile } = require('child_process');
 const fs = require('fs');
@@ -472,32 +472,98 @@ async function getIconPath(iconName) {
   return null;
 }
 
-function registerHotkey() {
-  globalShortcut.unregisterAll();
+const HOTKEY_CANDIDATES = [
+  'Alt+Space',
+  'Super+Space',
+  'Ctrl+Space',
+  'Alt+Shift+Space',
+  'Ctrl+Alt+Space',
+  'Ctrl+Shift+Space'
+];
+
+function tryRegisterHotkey(accelerator) {
   try {
-    const registered = globalShortcut.register(config.hotkey || 'Alt+Space', () => {
-      if (mainWindow.isVisible()) {
-        hideWindow();
-      } else {
-        showWindow();
-      }
+    const ok = globalShortcut.register(accelerator, () => {
+      if (mainWindow.isVisible()) hideWindow();
+      else showWindow();
     });
-    if (!registered) {
-      console.error('Failed to register hotkey. Falling back to Alt+Space');
-      globalShortcut.register('Alt+Space', () => {
-        if (mainWindow.isVisible()) hideWindow();
-        else showWindow();
-      });
-    }
-  } catch (err) {
-    console.error('Invalid hotkey:', err);
+    return ok;
+  } catch (e) {
+    return false;
   }
 }
 
-app.whenReady().then(() => {
+function findFreeHotkey() {
+  for (const combo of HOTKEY_CANDIDATES) {
+    if (tryRegisterHotkey(combo)) {
+      return combo;
+    }
+    globalShortcut.unregisterAll();
+  }
+  return null;
+}
+
+async function registerHotkey() {
+  globalShortcut.unregisterAll();
+
+  const desired = config.hotkey || 'Alt+Space';
+
+  // Try the configured hotkey first
+  if (tryRegisterHotkey(desired)) {
+    console.log(`Hotkey registered: ${desired}`);
+    return;
+  }
+
+  console.warn(`Failed to register hotkey: ${desired}`);
+
+  // Try to auto-find a free combo
+  globalShortcut.unregisterAll();
+  const free = findFreeHotkey();
+
+  if (free && free !== desired) {
+    config.hotkey = free;
+    saveConfig();
+    console.log(`Auto-selected free hotkey: ${free}`);
+
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Spoty — Hotkey',
+      message: config.language === 'hu'
+        ? `A(z) "${desired}" gyorsbillentyű foglalt.\nAutomatikusan átváltva: ${free}\n\nA Beállításokban bármikor módosíthatod.`
+        : `The hotkey "${desired}" is unavailable.\nAutomatically switched to: ${free}\n\nYou can change it anytime in Settings.`,
+      buttons: ['OK']
+    });
+    return;
+  }
+
+  // Nothing worked — ask the user to pick manually
+  const candidateLabels = HOTKEY_CANDIDATES.map(c => c);
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: 'Spoty — Hotkey',
+    message: config.language === 'hu'
+      ? 'Nem sikerült szabad gyorsbillentyűt találni.\nVálassz egyet az alábbiak közül:'
+      : 'Could not find a free hotkey.\nPlease choose one:',
+    buttons: [...candidateLabels, config.language === 'hu' ? 'Mégsem' : 'Cancel']
+  });
+
+  if (response < candidateLabels.length) {
+    const chosen = candidateLabels[response];
+    globalShortcut.unregisterAll();
+    if (tryRegisterHotkey(chosen)) {
+      config.hotkey = chosen;
+      saveConfig();
+      console.log(`User selected hotkey: ${chosen}`);
+    } else {
+      console.error(`Selected hotkey still unavailable: ${chosen}`);
+    }
+  }
+}
+
+app.whenReady().then(async () => {
   createWindow();
   startClipboardMonitoring();
-  registerHotkey();
+  await registerHotkey();
 
   ipcMain.on('window-hide', hideWindow);
 
