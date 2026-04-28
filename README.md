@@ -205,4 +205,4 @@ spoty/
 
 ## 📄 License
 
-[MIT](LICENSE) — Made with ❤️ by [Rexolt](https://github.com/Rexolt)
+[GPLv3](LICENSE) — Made with ❤️ by [Rexolt](https://github.com/Rexolt)
