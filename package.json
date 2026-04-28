@@ -1,6 +1,6 @@
 {
   "name": "spoty",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Modern Spotlight-like search & launcher app for Windows, Linux and macOS",
   "main": "main.js",
   "homepage": "https://github.com/Rexolt/spoty",
@@ -13,7 +13,13 @@
     "name": "Rexolt",
     "email": "c1e3x5eu@anonaddy.me"
   },
-  "keywords": ["spotlight", "launcher", "search", "electron", "desktop"],
+  "keywords": [
+    "spotlight",
+    "launcher",
+    "search",
+    "electron",
+    "desktop"
+  ],
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
@@ -66,8 +72,16 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "nsis": {
