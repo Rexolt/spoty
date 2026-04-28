@@ -1,39 +1,15 @@
-## What's New in v3.1.0
+## What's New in v3.1.1
 
-### Cross-Platform Support
-- **Windows** — Full support: app search (Start Menu), system commands, browser bookmarks, NSIS installer + portable
-- **macOS** — Full support: /Applications search, `open` launch, universal binary (Intel + Apple Silicon)
-- **Linux** — Improved: Flatpak app support, XDG user dirs, Wayland-compatible app launch (`gio`), `loginctl` lock
+### Performance & Speed
+- **Smart Caching**: Implemented a 5-minute memory cache for applications and browser bookmarks. This significantly reduces disk I/O and makes the search feel instantaneous.
+- **Concurrent Search**: Rewrote the search engine to use asynchronous parallel processing (`Promise.all`). Applications, files, and bookmarks are now searched simultaneously instead of one after another.
+- **Background Pre-warming**: The app now pre-loads the search cache in the background right after startup, so your first search is as fast as the last.
 
-### Multi-Architecture Builds
-- **Linux**: x64, arm64 — AppImage, .deb, .rpm, .pacman
-- **macOS**: Universal (Intel + Apple Silicon) — .dmg, .zip
-- **Windows**: x64, arm64 — Installer (.exe), Portable (.exe)
+### Build Improvements
+- **Simplified Filenames**: Cleaned up build artifact names by removing the version number. Installation files are now easier to manage (e.g., `Spoty-x64.AppImage` helyett `Spoty-3.1.1-x64.AppImage`).
 
-### New Features
-- **Start with system** — Auto-launch toggle in Settings (Linux, macOS, Windows)
-- **Smart hotkey registration** — Automatically finds a free hotkey if the configured one is unavailable, with user prompt fallback
-- **Edge bookmarks** — Microsoft Edge bookmark search support on all platforms
-
-### Bug Fixes & Security
-- **Fixed:** Settings not saving language, theme, aliases, Ollama config
-- **Fixed:** Command injection vulnerability in app launcher (now uses safe `execFile`)
-- **Fixed:** Weather widget crash on unexpected API response
-- **Fixed:** Deprecated `overflow-y: overlay` CSS
-- **Fixed:** Missing `.setting-hint` CSS rule
-- **Fixed:** Duplicate `font-family` declaration
-- **Security:** IPC channel whitelist in preload — only known channels are allowed
-- **Security:** `.desktop` files with `NoDisplay=true` / `Hidden=true` are now filtered out
-
-### Updated Dependencies
-- Electron 25 → **33**
-- electron-builder 23 → **25.1**
-
-### Project Quality
-- Professional `README.md` with install instructions for all platforms
-- MIT License
-- GitHub Actions CI/CD with automatic multi-arch builds and releases
-- Proper `.gitignore`, `appId`, `productName`
+### Maintenance
+- **Internal Optimization**: Fixed divergent git branches and stabilized the repository state for smoother updates.
 
 ---
 
@@ -41,19 +17,19 @@
 
 | Platform | Architecture | Package | File |
 |---|---|---|---|
-| **Linux** | x64 | AppImage | `Spoty-3.1.0-x64.AppImage` |
-| **Linux** | arm64 | AppImage | `Spoty-3.1.0-arm64.AppImage` |
-| **Linux** | x64 | Debian/Ubuntu | `Spoty-3.1.0-x64.deb` |
-| **Linux** | arm64 | Debian/Ubuntu | `Spoty-3.1.0-arm64.deb` |
-| **Linux** | x64 | Fedora/RHEL | `Spoty-3.1.0-x64.rpm` |
-| **Linux** | arm64 | Fedora/RHEL | `Spoty-3.1.0-arm64.rpm` |
-| **Linux** | x64 | Arch Linux | `Spoty-3.1.0-x64.pacman` |
-| **Linux** | arm64 | Arch Linux | `Spoty-3.1.0-arm64.pacman` |
-| **macOS** | Universal | DMG | `Spoty-3.1.0-universal.dmg` |
-| **macOS** | Universal | ZIP | `Spoty-3.1.0-universal.zip` |
-| **Windows** | x64 | Installer | `Spoty-Setup-3.1.0-x64.exe` |
-| **Windows** | arm64 | Installer | `Spoty-Setup-3.1.0-arm64.exe` |
-| **Windows** | x64 | Portable | `Spoty-Portable-3.1.0-x64.exe` |
-| **Windows** | arm64 | Portable | `Spoty-Portable-3.1.0-arm64.exe` |
+| **Linux** | x64 | AppImage | `Spoty-x64.AppImage` |
+| **Linux** | arm64 | AppImage | `Spoty-arm64.AppImage` |
+| **Linux** | x64 | Debian/Ubuntu | `Spoty-x64.deb` |
+| **Linux** | arm64 | Debian/Ubuntu | `Spoty-arm64.deb` |
+| **Linux** | x64 | Fedora/RHEL | `Spoty-x64.rpm` |
+| **Linux** | arm64 | Fedora/RHEL | `Spoty-arm64.rpm` |
+| **Linux** | x64 | Arch Linux | `Spoty-x64.pacman` |
+| **Linux** | arm64 | Arch Linux | `Spoty-arm64.pacman` |
+| **macOS** | Universal | DMG | `Spoty-universal.dmg` |
+| **macOS** | Universal | ZIP | `Spoty-universal.zip` |
+| **Windows** | x64 | Installer | `Spoty-Setup-x64.exe` |
+| **Windows** | arm64 | Installer | `Spoty-Setup-arm64.exe` |
+| **Windows** | x64 | Portable | `Spoty-Portable-x64.exe` |
+| **Windows** | arm64 | Portable | `Spoty-Portable-arm64.exe` |
 
 > **macOS note:** The app is unsigned. On first launch: right-click → Open → Open.
