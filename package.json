@@ -26,7 +26,7 @@
   "build": {
     "appId": "com.rexolt.spoty",
     "productName": "Spoty",
-    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "artifactName": "${productName}-${arch}.${ext}",
     "files": [
       "main.js",
       "preload.js",
@@ -71,13 +71,13 @@
       ]
     },
     "nsis": {
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "artifactName": "${productName}-Setup-${arch}.${ext}",
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false
     },
     "portable": {
-      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-Portable-${arch}.${ext}"
     }
   },
   "dependencies": {
