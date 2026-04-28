@@ -45,6 +45,7 @@ let selectedIndex = -1;
 let searchTimeout = null;
 let appSettings = null;
 let isAiMode = false;
+let chatDisplayMessages = []; // Persistent chat messages for AI mode
 
 // --- i18n Dictionary ---
 const i18n = {
@@ -257,13 +258,24 @@ function setupEventListeners() {
       searchInput.focus();
       searchInput.select();
     }, 50);
+
+    // If we're in AI mode, restore chat or show history
+    if (isAiMode) {
+      if (chatDisplayMessages.length > 0) {
+        renderChatMessages(false);
+      } else if (appSettings?.ai?.saveHistory) {
+        showAiHistoryHint();
+      }
+    }
   });
 
   window.electron.on('window-hide', () => {
     document.body.classList.remove('window-opening');
     document.body.classList.add('window-closing');
-    clearSearch();
+    searchInput.value = '';
+    clearButton.style.display = 'none';
     hideSettings();
+    // NOTE: chatDisplayMessages are NOT cleared — chat persists across hide/show
   });
 
   // --- TAB SWITCHING ---
@@ -322,7 +334,10 @@ function switchMode(mode) {
     if (appSettings?.ai?.useContext) {
       btnNewChat.style.display = 'flex';
     }
-    if (appSettings?.ai?.saveHistory) {
+    // Show existing chat or history hint
+    if (chatDisplayMessages.length > 0) {
+      renderChatMessages(false);
+    } else if (appSettings?.ai?.saveHistory) {
       showAiHistoryHint();
     }
   } else {
@@ -515,27 +530,87 @@ function renderResults(results) {
 async function startAiChat(query) {
   if (!query.trim()) return;
 
-  // Show loading indicator
-  footer.style.display = 'none';
-  resultsContainer.innerHTML = `
-    <div class="ai-chat-card loading fade-in">
-      <div class="ai-avatar">AI</div>
-      <div class="ai-content">
-        <div class="typing-indicator">
-          <span></span><span></span><span></span>
-        </div>
-      </div>
-    </div>
-  `;
-  updateWindowSize();
+  // Add user message to the chat
+  chatDisplayMessages.push({ role: 'user', content: query });
+
+  // Clear the input for the next message
+  searchInput.value = '';
+  clearButton.style.display = 'none';
+
+  // Render all messages + loading indicator
+  renderChatMessages(true);
 
   try {
     const reply = await window.electron.invoke('ask-ai', query);
-    renderAiReply(reply, false, query);
+    chatDisplayMessages.push({ role: 'assistant', content: reply });
+    renderChatMessages(false);
   } catch (err) {
     const errorDict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
-    renderAiReply(`${errorDict.ai_error}: ${err.message}`, true);
+    chatDisplayMessages.push({ role: 'assistant', content: `${errorDict.ai_error}: ${err.message}`, isError: true });
+    renderChatMessages(false);
   }
+}
+
+function renderChatMessages(showLoading = false) {
+  const dict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
+  footer.style.display = 'none';
+
+  let html = '<div class="ai-chat-container">';
+
+  for (let i = 0; i < chatDisplayMessages.length; i++) {
+    const msg = chatDisplayMessages[i];
+    const isLast = (i === chatDisplayMessages.length - 1) && !showLoading;
+
+    if (msg.role === 'user') {
+      html += `
+        <div class="ai-user-bubble ${isLast ? 'ai-msg-enter' : ''}">
+          <div class="ai-user-text">${escapeHtml(msg.content)}</div>
+        </div>`;
+    } else {
+      const isError = msg.isError;
+      let htmlText;
+      if (isError) {
+        htmlText = escapeHtml(msg.content).replace(/\n/g, '<br/>');
+      } else {
+        htmlText = DOMPurify.sanitize(marked.parse(msg.content));
+      }
+
+      html += `
+        <div class="ai-chat-card ${isLast ? 'ai-response-arrive' : ''} ${isError ? 'error' : ''}">
+          <div class="ai-avatar">${isError ? '⚠️' : 'AI'}</div>
+          <div class="ai-content">
+            <div class="ai-text">${htmlText}</div>
+            ${!isError ? `
+            <button class="ai-copy-btn" onclick="copyAiText(this)" data-text="${escapeHtml(msg.content)}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> ${dict.copy}
+            </button>` : ''}
+          </div>
+        </div>`;
+    }
+  }
+
+  if (showLoading) {
+    html += `
+      <div class="ai-chat-card loading">
+        <div class="ai-avatar">AI</div>
+        <div class="ai-content">
+          <div class="typing-indicator">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  html += '</div>';
+  resultsContainer.innerHTML = html;
+
+  // Scroll to bottom
+  const chatContainer = resultsContainer.querySelector('.ai-chat-container');
+  if (chatContainer) {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
+  updateWindowSize();
 }
 
 function showAiHistoryHint() {
@@ -682,31 +757,13 @@ window.closeAiHistory = function() {
 }
 
 function renderAiReply(text, isError = false, promptText = '', isFromHistory = false) {
-  footer.style.display = 'flex';
-
-  let htmlText = '';
-  if (isError) {
-    htmlText = escapeHtml(text).replace(/\n/g, '<br/>');
-  } else {
-    // Parse markdown and sanitize HTML to prevent XSS
-    const parsedMarkdown = marked.parse(text);
-    htmlText = DOMPurify.sanitize(parsedMarkdown);
+  // Legacy single-reply mode (used from history view)
+  chatDisplayMessages = [];
+  if (promptText) {
+    chatDisplayMessages.push({ role: 'user', content: promptText });
   }
-
-  resultsContainer.innerHTML = `
-    <div class="ai-chat-card fade-in ${isError ? 'error' : ''}">
-      <div class="ai-avatar">${isError ? '⚠️' : 'AI'}</div>
-      <div class="ai-content">
-        <div class="ai-text">${htmlText}</div>
-        ${!isError ? `
-        <button class="ai-copy-btn" onclick="copyAiText(this)" data-text="${escapeHtml(text)}">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> ${(i18n[appSettings?.language || 'hu'] || i18n['hu']).copy}
-        </button>
-        ` : ''}
-      </div>
-    </div>
-  `;
-  updateWindowSize();
+  chatDisplayMessages.push({ role: 'assistant', content: text, isError });
+  renderChatMessages(false);
 }
 
 window.copyAiText = function (btn) {
@@ -893,7 +950,17 @@ function handleKeyPress(e) {
   switch (e.key) {
     case 'Escape':
       if (searchInput.value) {
-        clearSearch();
+        // First: clear the input text
+        searchInput.value = '';
+        clearButton.style.display = 'none';
+      } else if (isAiMode && chatDisplayMessages.length > 0) {
+        // Second: clear the chat and show history/empty state
+        chatDisplayMessages = [];
+        window.electron.send('reset-ai-context');
+        clearResults();
+        if (appSettings?.ai?.saveHistory) {
+          showAiHistoryHint();
+        }
       } else {
         window.electron.send('window-hide');
       }
@@ -965,6 +1032,13 @@ function handleKeyPress(e) {
 function clearSearch() {
   searchInput.value = '';
   clearButton.style.display = 'none';
+
+  // In AI mode with active chat, just clear the input, not the chat
+  if (isAiMode && chatDisplayMessages.length > 0) {
+    searchInput.focus();
+    return;
+  }
+
   clearResults();
   searchInput.focus();
 }
@@ -1013,7 +1087,10 @@ function updateWindowSizeForSettings() {
 // Reset AI conversation context
 function resetAiContext() {
   window.electron.send('reset-ai-context');
-  clearSearch();
+  chatDisplayMessages = [];
+  searchInput.value = '';
+  clearButton.style.display = 'none';
+  clearResults();
 
   const dict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
   resultsContainer.innerHTML = `

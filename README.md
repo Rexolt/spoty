@@ -1,135 +1,208 @@
-# Spoty
+<div align="center">
 
-A modern, Spotlight-like search & launcher application for **Windows**, **macOS** and **Linux** (Arch, Debian, Fedora, and more).
+# ✨ Spoty
 
-Built with Electron. Fast, lightweight, and highly customizable.
+**A modern, lightning-fast Spotlight-like launcher for Windows, macOS, and Linux**
 
-## Features
+[![GitHub Release](https://img.shields.io/github/v/release/Rexolt/spoty?style=for-the-badge&logo=github&color=0A84FF)](https://github.com/Rexolt/spoty/releases/latest)
+[![License](https://img.shields.io/github/license/Rexolt/spoty?style=for-the-badge&color=2ecc71)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blueviolet?style=for-the-badge)](#installation)
+[![Electron](https://img.shields.io/badge/Electron-33-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 
-- **Application launcher** — Fuzzy search across installed apps
-- **File search** — Instantly find files in Desktop, Documents, Downloads
-- **Browser bookmarks** — Search Chrome, Brave, Chromium, Edge bookmarks
-- **Calculator & unit converter** — `5 km to mi`, `100 usd to eur`, `2+2`
-- **Weather widget** — `weather budapest`
+<br/>
+
+*Search apps, files, bookmarks — or chat with AI. All from one shortcut.*
+
+</div>
+
+---
+
+## 🚀 Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🔍 Search & Launch
+- **App launcher** — Fuzzy search across installed apps
+- **File search** — Desktop, Documents, Downloads
+- **Browser bookmarks** — Chrome, Brave, Edge, Chromium
 - **System commands** — `lock`, `sleep`, `shutdown`, `restart`
-- **Web search** — `g search query` or `? search query`
-- **Clipboard history** — Type `clip` to browse recent entries
-- **AI mode** — OpenAI, Google Gemini, or local Ollama integration
-- **Custom aliases** — Define your own multi-action shortcuts
-- **Themes** — Dark, Light, Ocean, Forest, Midnight (OLED)
-- **Bilingual UI** — Hungarian & English
- 
-## Installation
+- **Web search** — `g query` or `? query`
+- **Clipboard history** — type `clip`
+
+</td>
+<td width="50%">
+
+### 🧠 AI & Tools
+- **AI Mode** — OpenAI, Google Gemini, or Ollama (local)
+- **Multi-turn chat** — Context-aware conversations
+- **Chat history** — Save & browse past conversations
+- **Calculator** — `2+2`, `(5*3)+10`
+- **Unit converter** — `5 km to mi`, `100 usd to eur`
+- **Weather** — `weather budapest`
+
+</td>
+</tr>
+</table>
+
+### 🎨 Customization
+- **5 Themes** — Dark, Light, Ocean, Forest, Midnight (OLED)
+- **Custom aliases** — Multi-action shortcuts in JSON
+- **Bilingual** — Hungarian 🇭🇺 & English 🇬🇧
+- **Configurable hotkey** — Auto-fallback if the preferred key is taken
+
+---
+
+## 📦 Installation
 
 ### Linux
 
-#### AppImage (universal)
-
-Download the `.AppImage` from [Releases](https://github.com/Rexolt/spoty/releases), make it executable, and run:
-
-```bash
-chmod +x Spoty-*.AppImage
-./Spoty-*.AppImage
-```
-
-#### Debian / Ubuntu (.deb)
+<details>
+<summary><b>AppImage (universal)</b></summary>
 
 ```bash
-sudo dpkg -i spoty_*.deb
+chmod +x Spoty-x64.AppImage
+./Spoty-x64.AppImage
 ```
+</details>
 
-#### Fedora / RHEL (.rpm)
+<details>
+<summary><b>Debian / Ubuntu (.deb)</b></summary>
 
 ```bash
-sudo rpm -i spoty-*.rpm
+sudo dpkg -i Spoty-x64.deb
 ```
+</details>
 
-#### Arch Linux (.pacman)
+<details>
+<summary><b>Fedora / RHEL (.rpm)</b></summary>
 
 ```bash
-sudo pacman -U spoty-*.pacman
+sudo rpm -i Spoty-x64.rpm
 ```
+</details>
+
+<details>
+<summary><b>Arch Linux (.pacman)</b></summary>
+
+```bash
+sudo pacman -U Spoty-x64.pacman
+```
+</details>
 
 ### macOS
 
-Download the `.dmg` from [Releases](https://github.com/Rexolt/spoty/releases), open it and drag Spoty to Applications.
+Download the `.dmg` from [**Releases**](https://github.com/Rexolt/spoty/releases/latest), open it and drag Spoty to Applications.
 
-> **Note:** The app is unsigned. On first launch, right-click → Open, then click Open in the dialog.
+> [!NOTE]
+> The app is unsigned. On first launch: **right-click → Open → Open**.
 
 ### Windows
 
-Download the `.exe` installer or the portable version from [Releases](https://github.com/Rexolt/spoty/releases).
+Download the **Installer** (`.exe`) or the **Portable** version from [**Releases**](https://github.com/Rexolt/spoty/releases/latest).
 
-## Build from Source
+---
 
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) >= 18
-- npm >= 9
-
-### Setup
-
-```bash
-git clone https://github.com/Rexolt/spoty.git
-cd spoty
-npm install
-```
-
-### Development
-
-```bash
-npm start
-```
-
-### Build packages
-
-```bash
-# Linux (AppImage, deb, rpm, pacman)
-npm run build:linux
-
-# macOS (dmg, zip — unsigned)
-npm run build:mac
-
-# Windows (NSIS installer, portable)
-npm run build:win
-
-# All platforms
-npm run build:all
-```
-
-Output goes to the `dist/` directory.
-
-## Configuration
-
-Config is stored at:
-
-- **Linux**: `~/.config/spoty/config.json`
-- **macOS**: `~/.config/spoty/config.json`
-- **Windows**: `%APPDATA%\spoty\config.json`
-
-All settings can be changed from the in-app Settings panel (gear icon).
-
-## Keyboard Shortcuts
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
-| `Alt+Space` | Toggle Spoty (configurable) |
+| `Alt+Space` | Toggle Spoty *(configurable)* |
+| `↑` `↓` | Navigate results |
 | `Enter` | Open selected item |
-| `Shift+Enter` | Open file location |
-| `↑` / `↓` | Navigate results |
-| `Tab` / `Shift+Tab` | Cycle results |
+| `Shift+Enter` | Open containing folder |
+| `Tab` / `Shift+Tab` | Cycle through results |
+| `Ctrl+1`–`9` | Quick-select result |
+| `Ctrl+N` | New AI conversation |
+| `Ctrl+,` | Open / close Settings |
 | `Esc` | Clear search / hide window |
-| `Ctrl+1`–`9` | Quick-select result by index |
 
-## Search Prefixes
+### Search Prefixes
 
-| Prefix | Function |
+| Prefix | Function | Example |
+|---|---|---|
+| `g ` or `? ` | Web search | `g electron docs` |
+| `>` | Run terminal command | `>htop` |
+| `weather ` | Weather lookup | `weather london` |
+| `clip` | Clipboard history | `clip` |
+| *(number)* | Calculator | `(5+3)*2` |
+| *(conversion)* | Unit / currency converter | `10 usd to eur` |
+
+---
+
+## 🛠️ Build from Source
+
+**Prerequisites:** [Node.js](https://nodejs.org/) ≥ 18, npm ≥ 9
+
+```bash
+# Clone & install
+git clone https://github.com/Rexolt/spoty.git
+cd spoty
+npm install
+
+# Run in development
+npm start
+
+# Build for your platform
+npm run build:linux   # AppImage, deb, rpm, pacman
+npm run build:mac     # dmg, zip (unsigned)
+npm run build:win     # NSIS installer, portable
+npm run build:all     # All platforms
+```
+
+Output goes to `dist/`.
+
+---
+
+## ⚙️ Configuration
+
+Settings are accessible via the **gear icon** in the app, or by editing the config file directly:
+
+| Platform | Path |
 |---|---|
-| `g ` or `? ` | Web search (Google) |
-| `>` | Run terminal command |
-| `weather ` | Weather lookup |
-| `clip` | Clipboard history |
+| Linux | `~/.config/spoty/config.json` |
+| macOS | `~/.config/spoty/config.json` |
+| Windows | `%APPDATA%\spoty\config.json` |
 
-## License
+### AI Setup
 
-[MIT](LICENSE)
+| Provider | What you need |
+|---|---|
+| **OpenAI** | API key from [platform.openai.com](https://platform.openai.com/) |
+| **Google Gemini** | API key from [aistudio.google.com](https://aistudio.google.com/) |
+| **Ollama** | Local install from [ollama.com](https://ollama.com/) — no key needed |
+
+---
+
+## 🏗️ Architecture
+
+```
+spoty/
+├── main.js          # Electron main process (search, AI, IPC)
+├── preload.js       # Secure IPC bridge with channel whitelist
+├── src/
+│   ├── index.html   # App shell with CSP
+│   ├── renderer.js  # UI logic, keyboard navigation, i18n
+│   └── styles.css   # Theming, animations, frosted glass
+├── build/icons/     # App icons (ico, png)
+└── package.json     # Config, scripts, electron-builder
+```
+
+---
+
+## 🔒 Security
+
+- **Context Isolation** — Renderer has no access to Node.js
+- **Sandbox** — Renderer runs in a sandboxed process
+- **IPC Whitelist** — Only known channels are allowed in preload
+- **CSP** — Content Security Policy blocks inline scripts
+- **Safe Math** — Calculator uses a custom parser, not `eval()`
+- **URL Validation** — `shell.openExternal` only allows `http(s)://`
+- **Ollama Guard** — SSRF protection: only `localhost` is allowed
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) — Made with ❤️ by [Rexolt](https://github.com/Rexolt)

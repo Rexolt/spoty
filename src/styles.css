@@ -607,6 +607,66 @@ body.theme-light .weather-card {
   margin-right: 4px;
 }
 
+/* -- AI CHAT LAYOUT -- */
+.ai-chat-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.ai-chat-container::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ai-chat-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-chat-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+/* User message bubble */
+.ai-user-bubble {
+  align-self: flex-end;
+  max-width: 80%;
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 16px 16px 4px 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.25);
+  animation: aiCardReveal 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ai-user-bubble.ai-msg-enter {
+  animation: userMsgSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes userMsgSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) translateX(8px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) translateX(0) scale(1);
+  }
+}
+
+body.theme-light .ai-user-bubble {
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
+}
+
 /* -- AI CHAT BUBBLES -- */
 .ai-chat-card {
   display: flex;
@@ -621,6 +681,86 @@ body.theme-light .weather-card {
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 1px 1px rgba(255, 255, 255, 0.15) inset;
+  animation: aiCardReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ai-chat-card.loading {
+  animation: aiCardReveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+             aiPulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes aiCardReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes aiPulseGlow {
+  0%, 100% {
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(10, 132, 255, 0),
+      0 1px 1px rgba(255, 255, 255, 0.15) inset;
+  }
+  50% {
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 20px 4px rgba(10, 132, 255, 0.15),
+      0 1px 1px rgba(255, 255, 255, 0.15) inset;
+  }
+}
+
+/* Response arriving animation */
+.ai-chat-card.ai-response-arrive {
+  animation: aiResponsePop 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes aiResponsePop {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 30px 8px rgba(10, 132, 255, 0.25),
+      0 1px 1px rgba(255, 255, 255, 0.15) inset;
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.005);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 15px 3px rgba(10, 132, 255, 0.1),
+      0 1px 1px rgba(255, 255, 255, 0.15) inset;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(10, 132, 255, 0),
+      0 1px 1px rgba(255, 255, 255, 0.15) inset;
+  }
+}
+
+/* AI avatar spin animation */
+.ai-chat-card.loading .ai-avatar {
+  animation: aiAvatarPulse 2s ease-in-out infinite;
+}
+
+@keyframes aiAvatarPulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px var(--selection-border);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4);
+    transform: scale(1.05);
+  }
 }
 
 body.theme-light .ai-chat-card {
