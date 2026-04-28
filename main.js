@@ -205,6 +205,10 @@ function loadConfig() {
       if (config.search.enableCalculator === undefined) config.search.enableCalculator = true;
       if (config.search.enableClipboard === undefined) config.search.enableClipboard = true;
 
+      // Ensure defaults for AI features
+      if (config.ai.saveHistory === undefined) config.ai.saveHistory = false;
+      if (config.ai.useContext === undefined) config.ai.useContext = false;
+
       // Backwards compat for old AI config
       if (loaded.ai && loaded.ai.apiKey && !loaded.ai.openaiApiKey) {
         config.ai.openaiApiKey = loaded.ai.apiKey;
@@ -291,8 +295,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
+      nodeIntegration: false
     }
   };
 
@@ -333,9 +336,8 @@ function hideWindow() {
   mainWindow.hide();
   mainWindow.setSize(config.window.width, config.window.minHeight);
   mainWindow.webContents.send('window-hide');
-
-  // Reset AI conversation context on window hide
-  conversationMessages = [];
+  // Note: conversation context is NOT cleared here on purpose.
+  // User clears it manually with Ctrl+N or the '+' button.
 }
 
 function resizeWindow(newHeight) {
