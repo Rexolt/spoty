@@ -19,6 +19,12 @@ let clipboardHistory = [];
 let exchangeRates = null;
 let exchangeRatesTime = 0;
 
+// App and Bookmark cache
+let appsCache = null;
+let appsCacheTime = 0;
+let bookmarksCache = null;
+let bookmarksCacheTime = 0;
+
 const configPath = isWindows
   ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'spoty')
   : path.join(os.homedir(), '.config', 'spoty');
@@ -140,6 +146,8 @@ async function fetchExchangeRates() {
 
 // Fire and forget
 fetchExchangeRates();
+getApplications();
+getBookmarks();
 
 function createWindow() {
   const display = screen.getPrimaryDisplay();
@@ -226,13 +234,17 @@ function startClipboardMonitoring() {
   }, 1000);
 }
 
-async function searchApplications(query) {
+async function getApplications() {
+  const now = Date.now();
+  if (appsCache && (now - appsCacheTime < 300000)) {
+    return appsCache;
+  }
+
   const apps = [];
 
   if (isMac) {
-    // macOS: scan /Applications for .app bundles
     const appDirs = ['/Applications', path.join(os.homedir(), 'Applications')];
-    for (const dir of appDirs) {
+    await Promise.all(appDirs.map(async (dir) => {
       try {
         const items = await fs.promises.readdir(dir);
         for (const item of items) {
@@ -246,12 +258,9 @@ async function searchApplications(query) {
             });
           }
         }
-      } catch (e) {
-        // Skip unreadable directories
-      }
-    }
+      } catch (e) { }
+    }));
   } else if (isWindows) {
-    // Windows: scan Start Menu for .lnk files
     const startMenuDirs = [
       path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
       path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs')
@@ -261,7 +270,7 @@ async function searchApplications(query) {
       if (depth > 3) return;
       try {
         const items = await fs.promises.readdir(dir, { withFileTypes: true });
-        for (const item of items) {
+        await Promise.all(items.map(async (item) => {
           const fullPath = path.join(dir, item.name);
           if (item.isDirectory()) {
             await scanDir(fullPath, depth + 1);
@@ -274,17 +283,12 @@ async function searchApplications(query) {
               description: ''
             });
           }
-        }
-      } catch (e) {
-        // Skip unreadable directories
-      }
+        }));
+      } catch (e) { }
     }
 
-    for (const dir of startMenuDirs) {
-      await scanDir(dir);
-    }
+    await Promise.all(startMenuDirs.map(dir => scanDir(dir)));
   } else {
-    // Linux: scan .desktop files
     const dirs = [
       '/usr/share/applications',
       path.join(os.homedir(), '.local/share/applications'),
@@ -292,18 +296,16 @@ async function searchApplications(query) {
       path.join(os.homedir(), '.local/share/flatpak/exports/share/applications')
     ];
 
-    for (const dir of dirs) {
+    await Promise.all(dirs.map(async (dir) => {
       try {
         const files = await fs.promises.readdir(dir);
-        for (const file of files) {
-          if (!file.endsWith('.desktop')) continue;
+        await Promise.all(files.map(async (file) => {
+          if (!file.endsWith('.desktop')) return;
 
           try {
             const content = await fs.promises.readFile(path.join(dir, file), 'utf-8');
-
-            // Skip hidden/non-display entries
-            if (/^NoDisplay=true$/m.test(content)) continue;
-            if (/^Hidden=true$/m.test(content)) continue;
+            if (/^NoDisplay=true$/m.test(content)) return;
+            if (/^Hidden=true$/m.test(content)) return;
 
             const name = content.match(/^Name=(.+)$/m)?.[1];
             const icon = content.match(/^Icon=(.+)$/m)?.[1];
@@ -318,15 +320,19 @@ async function searchApplications(query) {
                 description: comment || ''
               });
             }
-          } catch (e) {
-            // Skip unreadable files
-          }
-        }
-      } catch (e) {
-        // Skip unreadable/missing directories
-      }
-    }
+          } catch (e) { }
+        }));
+      } catch (e) { }
+    }));
   }
+
+  appsCache = apps;
+  appsCacheTime = now;
+  return apps;
+}
+
+async function searchApplications(query) {
+  const apps = await getApplications();
 
   if (query) {
     const fuse = new Fuse(apps, {
@@ -340,8 +346,11 @@ async function searchApplications(query) {
 }
 
 // Browser Bookmarks search
-async function searchBookmarks(query) {
-  if (!config.search.enableBookmarks || query.length < 2) return [];
+async function getBookmarks() {
+  const now = Date.now();
+  if (bookmarksCache && (now - bookmarksCacheTime < 300000)) {
+    return bookmarksCache;
+  }
 
   const bookmarkPaths = isMac ? [
     path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Bookmarks'),
@@ -360,39 +369,57 @@ async function searchBookmarks(query) {
     path.join(os.homedir(), '.config', 'microsoft-edge', 'Default', 'Bookmarks')
   ];
 
-  const results = [];
-  const qLower = query.toLowerCase();
+  const allBookmarks = [];
 
-  function extractUrls(node) {
+  function extractAllUrls(node) {
     if (node.type === 'url' && node.url && node.name) {
-      if (node.name.toLowerCase().includes(qLower) || node.url.toLowerCase().includes(qLower)) {
-        results.push({
-          type: 'web',
-          name: node.name,
-          url: node.url,
-          description: `Könyvjelző • ${new URL(node.url).hostname}`
-        });
-      }
+      allBookmarks.push({
+        type: 'web',
+        name: node.name,
+        url: node.url,
+        description: ''
+      });
     } else if (node.type === 'folder' && node.children) {
       for (const child of node.children) {
-        extractUrls(child);
+        extractAllUrls(child);
       }
     }
   }
 
-  for (const bp of bookmarkPaths) {
+  await Promise.all(bookmarkPaths.map(async (bp) => {
     try {
       if (fs.existsSync(bp)) {
         const data = await fs.promises.readFile(bp, 'utf-8');
         const json = JSON.parse(data);
         if (json.roots) {
-          if (json.roots.bookmark_bar) extractUrls(json.roots.bookmark_bar);
-          if (json.roots.other) extractUrls(json.roots.other);
-          if (json.roots.synced) extractUrls(json.roots.synced);
+          if (json.roots.bookmark_bar) extractAllUrls(json.roots.bookmark_bar);
+          if (json.roots.other) extractAllUrls(json.roots.other);
+          if (json.roots.synced) extractAllUrls(json.roots.synced);
         }
       }
-    } catch (e) {
-      // Missing or unreadable
+    } catch (e) { }
+  }));
+
+  bookmarksCache = allBookmarks;
+  bookmarksCacheTime = now;
+  return allBookmarks;
+}
+
+async function searchBookmarks(query) {
+  if (!config.search.enableBookmarks || query.length < 2) return [];
+  const qLower = query.toLowerCase();
+  
+  const allBookmarks = await getBookmarks();
+  const results = [];
+  
+  for (const b of allBookmarks) {
+    if (b.name.toLowerCase().includes(qLower) || b.url.toLowerCase().includes(qLower)) {
+      try {
+        const hostname = new URL(b.url).hostname;
+        results.push({ ...b, description: `Könyvjelző • ${hostname}` });
+      } catch (e) {
+        results.push({ ...b, description: `Könyvjelző` });
+      }
     }
   }
 
@@ -439,12 +466,13 @@ async function searchFiles(query) {
   }
 
   const files = [];
+  const qLower = query.toLowerCase();
 
-  for (const searchPath of searchPaths) {
+  await Promise.all(searchPaths.map(async (searchPath) => {
     try {
       const items = await fs.promises.readdir(searchPath);
       for (const item of items) {
-        if (item.toLowerCase().includes(query.toLowerCase())) {
+        if (item.toLowerCase().includes(qLower)) {
           files.push({
             type: 'file',
             name: item,
@@ -453,10 +481,8 @@ async function searchFiles(query) {
           });
         }
       }
-    } catch (e) {
-      // Skip missing/unreadable directories
-    }
-  }
+    } catch (e) { }
+  }));
 
   return files;
 }
@@ -843,9 +869,11 @@ app.whenReady().then(async () => {
 
       // Default fallback (apps & files & bookmarks)
       if (results.length === 0 && query.length > 0) {
-        const apps = await searchApplications(query);
-        const files = await searchFiles(query);
-        const bookmarks = await searchBookmarks(query);
+        const [apps, files, bookmarks] = await Promise.all([
+          searchApplications(query),
+          searchFiles(query),
+          searchBookmarks(query)
+        ]);
 
         // Mix results, prioritizing apps
         results.push(...apps.slice(0, 5));
