@@ -2,9 +2,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const validSendChannels = [
   'window-hide', 'window-resize', 'app-launch', 'item-show-folder',
-  'url-open', 'clipboard-copy', 'command-run', 'alias-run', 'save-settings'
+  'url-open', 'clipboard-copy', 'command-run', 'alias-run', 'save-settings',
+  'reset-ai-context'
 ];
-const validInvokeChannels = ['search', 'ask-ai', 'get-icon', 'get-settings'];
+const validInvokeChannels = ['search', 'ask-ai', 'get-icon', 'get-settings', 'get-chat-history', 'delete-chat-history'];
 const validOnChannels = ['window-show', 'window-hide'];
 
 contextBridge.exposeInMainWorld('electron', {

@@ -36,6 +36,9 @@ const setOllamaModel = document.getElementById('set-ollama-model');
 const setAliases = document.getElementById('set-aliases');
 const setLanguage = document.getElementById('set-language');
 const setTheme = document.getElementById('set-theme');
+const setAiHistory = document.getElementById('set-ai-history');
+const setAiContext = document.getElementById('set-ai-context');
+const btnNewChat = document.getElementById('btn-new-chat');
 
 let currentResults = [];
 let selectedIndex = -1;
@@ -95,7 +98,17 @@ const i18n = {
     type_default: "Találat",
     copy: "Másolás",
     copied: "Másolva!",
-    ai_error: "Hiba történt"
+    ai_error: "Hiba történt",
+    settings_ai_history: "Csevegési előzmények mentése",
+    settings_ai_context: "Kontextus megőrzése (csevegés)",
+    ai_history_title: "Korábbi beszélgetések",
+    ai_history_empty: "Még nincsenek mentett beszélgetések.",
+    ai_history_delete: "Törlés",
+    ai_history_delete_all: "Mindent töröl",
+    ai_history_back: "Vissza",
+    ai_new_chat: "Új beszélgetés",
+    ai_context_on: "Kontextus be",
+    ai_context_hint: "Az AI emlékszik a korábbi üzeneteidre ebben a munkamenetben"
   },
   en: {
     tab_search: "Search",
@@ -147,7 +160,17 @@ const i18n = {
     type_default: "Result",
     copy: "Copy",
     copied: "Copied!",
-    ai_error: "Error occurred"
+    ai_error: "Error occurred",
+    settings_ai_history: "Save chat history",
+    settings_ai_context: "Keep context (conversation)",
+    ai_history_title: "Previous conversations",
+    ai_history_empty: "No saved conversations yet.",
+    ai_history_delete: "Delete",
+    ai_history_delete_all: "Delete all",
+    ai_history_back: "Back",
+    ai_new_chat: "New conversation",
+    ai_context_on: "Context on",
+    ai_context_hint: "The AI remembers your previous messages in this session"
   }
 };
 
@@ -265,6 +288,12 @@ function setupEventListeners() {
       ollamaSettingsBlock.style.display = 'block';
     }
   });
+
+  // New Chat button
+  btnNewChat.addEventListener('click', resetAiContext);
+
+  // Settings keyboard navigation
+  settingsOverlay.addEventListener('keydown', handleSettingsKeyboard);
 }
 
 function switchMode(mode) {
@@ -287,6 +316,18 @@ function switchMode(mode) {
   }
 
   clearSearch();
+
+  // Show/hide new-chat button and context indicator
+  if (isAiMode) {
+    if (appSettings?.ai?.useContext) {
+      btnNewChat.style.display = 'flex';
+    }
+    if (appSettings?.ai?.saveHistory) {
+      showAiHistoryHint();
+    }
+  } else {
+    btnNewChat.style.display = 'none';
+  }
 }
 
 function showSettings() {
@@ -322,6 +363,8 @@ function populateSettingsUI(config) {
   setGeminiModel.value = config.ai.geminiModel || 'gemini-2.5-flash';
   if (setOllamaUrl) setOllamaUrl.value = config.ai.ollamaUrl || 'http://localhost:11434';
   if (setOllamaModel) setOllamaModel.value = config.ai.ollamaModel || 'llama3.2';
+  if (setAiHistory) setAiHistory.checked = config.ai.saveHistory === true;
+  if (setAiContext) setAiContext.checked = config.ai.useContext === true;
 
   // Trigger change to update block visibility
   setAiProvider.dispatchEvent(new Event('change'));
@@ -358,7 +401,9 @@ function saveSettings() {
       geminiApiKey: setGeminiApiKey.value,
       geminiModel: setGeminiModel.value,
       ollamaUrl: setOllamaUrl ? setOllamaUrl.value : 'http://localhost:11434',
-      ollamaModel: setOllamaModel ? setOllamaModel.value : 'llama3.2'
+      ollamaModel: setOllamaModel ? setOllamaModel.value : 'llama3.2',
+      saveHistory: setAiHistory ? setAiHistory.checked : false,
+      useContext: setAiContext ? setAiContext.checked : false
     }
   };
 
@@ -383,6 +428,15 @@ function saveSettings() {
   appSettings.ai.geminiModel = newSettings.ai.geminiModel;
   appSettings.ai.ollamaUrl = newSettings.ai.ollamaUrl;
   appSettings.ai.ollamaModel = newSettings.ai.ollamaModel;
+  appSettings.ai.saveHistory = newSettings.ai.saveHistory;
+  appSettings.ai.useContext = newSettings.ai.useContext;
+
+  // Update new-chat button visibility
+  if (isAiMode && appSettings.ai.useContext) {
+    btnNewChat.style.display = 'flex';
+  } else {
+    btnNewChat.style.display = 'none';
+  }
 
   // Apply immediately
   translateUI(appSettings.language);
@@ -477,14 +531,157 @@ async function startAiChat(query) {
 
   try {
     const reply = await window.electron.invoke('ask-ai', query);
-    renderAiReply(reply);
+    renderAiReply(reply, false, query);
   } catch (err) {
     const errorDict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
     renderAiReply(`${errorDict.ai_error}: ${err.message}`, true);
   }
 }
 
-function renderAiReply(text, isError = false) {
+function showAiHistoryHint() {
+  // Show a subtle hint in the results area with a button to open history
+  if (!appSettings?.ai?.saveHistory) return;
+
+  const dict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
+  footer.style.display = 'none';
+  resultsContainer.innerHTML = `
+    <div class="ai-history-hint fade-in" style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">
+      <button class="ai-history-btn" onclick="openAiHistory()" style="
+        background: var(--selection-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+      ">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        ${dict.ai_history_title}
+      </button>
+    </div>
+  `;
+  updateWindowSize();
+}
+
+window.openAiHistory = async function() {
+  const dict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
+  let history = [];
+  try {
+    history = await window.electron.invoke('get-chat-history');
+  } catch (e) {
+    console.error('Failed to load chat history:', e);
+  }
+
+  footer.style.display = 'none';
+
+  if (!history || history.length === 0) {
+    resultsContainer.innerHTML = `
+      <div class="ai-history-panel fade-in" style="padding: 16px; text-align: center;">
+        <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px;">${dict.ai_history_empty}</div>
+        <button class="ai-history-btn" onclick="closeAiHistory()" style="
+          background: var(--selection-bg);
+          border: 1px solid var(--border-color);
+          color: var(--text-main);
+          padding: 6px 14px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+        ">${dict.ai_history_back}</button>
+      </div>
+    `;
+    updateWindowSize();
+    return;
+  }
+
+  // Render history list (newest first)
+  const reversed = [...history].reverse();
+  let html = '<div class="ai-history-panel fade-in" style="padding: 8px;">';
+  html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px;">`;
+  html += `<button class="ai-history-btn" onclick="closeAiHistory()" style="
+    background: var(--selection-bg); border: 1px solid var(--border-color); color: var(--text-main);
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  ">${dict.ai_history_back}</button>`;
+  html += `<button class="ai-history-btn" onclick="deleteAllHistory()" style="
+    background: rgba(255,60,60,0.1); border: 1px solid rgba(255,60,60,0.2); color: #ff4444;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  ">${dict.ai_history_delete_all}</button>`;
+  html += `</div>`;
+
+  for (const entry of reversed) {
+    const date = new Date(entry.time);
+    const timeStr = date.toLocaleDateString(appSettings?.language === 'en' ? 'en-US' : 'hu-HU', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const promptPreview = escapeHtml(entry.prompt.substring(0, 60)) + (entry.prompt.length > 60 ? '...' : '');
+    const replyPreview = escapeHtml(entry.reply.substring(0, 80)) + (entry.reply.length > 80 ? '...' : '');
+
+    html += `
+      <div class="result-item" style="cursor: pointer; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 14px;" onclick="viewHistoryEntry('${entry.id}')">
+        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+          <div class="result-title" style="font-size: 14px;">${promptPreview}</div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <span style="font-size: 10px; color: var(--text-muted);">${timeStr}</span>
+            <button onclick="event.stopPropagation(); deleteHistoryEntry('${entry.id}')" style="
+              background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;
+              font-size: 11px; opacity: 0.6; transition: opacity 0.2s;
+            " onmouseover="this.style.opacity=1;this.style.color='#ff4444'" onmouseout="this.style.opacity=0.6;this.style.color='var(--text-muted)'">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+        <div class="result-desc" style="font-size: 12px; white-space: normal; line-height: 1.4;">${replyPreview}</div>
+      </div>
+    `;
+  }
+  html += '</div>';
+  resultsContainer.innerHTML = html;
+  updateWindowSize();
+}
+
+window.viewHistoryEntry = async function(id) {
+  let history = [];
+  try {
+    history = await window.electron.invoke('get-chat-history');
+  } catch (e) { return; }
+
+  const entry = history.find(e => e.id === id);
+  if (!entry) return;
+
+  searchInput.value = entry.prompt;
+  clearButton.style.display = 'flex';
+  renderAiReply(entry.reply, false, entry.prompt, true);
+}
+
+window.deleteHistoryEntry = async function(id) {
+  try {
+    await window.electron.invoke('delete-chat-history', id);
+    openAiHistory();
+  } catch (e) {
+    console.error('Failed to delete:', e);
+  }
+}
+
+window.deleteAllHistory = async function() {
+  try {
+    await window.electron.invoke('delete-chat-history', '__all__');
+    openAiHistory();
+  } catch (e) {
+    console.error('Failed to delete all:', e);
+  }
+}
+
+window.closeAiHistory = function() {
+  clearResults();
+  if (isAiMode && appSettings?.ai?.saveHistory) {
+    showAiHistoryHint();
+  }
+}
+
+function renderAiReply(text, isError = false, promptText = '', isFromHistory = false) {
   footer.style.display = 'flex';
 
   let htmlText = '';
@@ -741,6 +938,22 @@ function handleKeyPress(e) {
       break;
   }
 
+  // Ctrl+N: new AI conversation
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n' && isAiMode) {
+    e.preventDefault();
+    resetAiContext();
+  }
+
+  // Ctrl+, : open settings
+  if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+    e.preventDefault();
+    if (settingsOverlay.style.display === 'none' || !settingsOverlay.style.display) {
+      showSettings();
+    } else {
+      hideSettings();
+    }
+  }
+
   if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
     const index = parseInt(e.key) - 1;
     if (currentResults[index]) {
@@ -795,4 +1008,84 @@ function updateWindowSize() {
 function updateWindowSizeForSettings() {
   // Fixed size when settings page is open
   window.electron.send('window-resize', 500);
+}
+
+// Reset AI conversation context
+function resetAiContext() {
+  window.electron.send('reset-ai-context');
+  clearSearch();
+
+  const dict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
+  resultsContainer.innerHTML = `
+    <div class="ai-history-hint fade-in" style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">
+      <div style="margin-bottom: 4px;">✨ ${dict.ai_new_chat}</div>
+    </div>
+  `;
+  updateWindowSize();
+
+  setTimeout(() => {
+    if (isAiMode && appSettings?.ai?.saveHistory) {
+      showAiHistoryHint();
+    } else {
+      clearResults();
+    }
+  }, 1200);
+}
+
+// Keyboard navigation inside settings overlay
+function handleSettingsKeyboard(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    hideSettings();
+    return;
+  }
+
+  // Get all focusable elements inside settings
+  const focusable = settingsOverlay.querySelectorAll(
+    'input, select, textarea, button, [tabindex]:not([tabindex="-1"])'
+  );
+  const focusArray = Array.from(focusable).filter(el => {
+    // Only include visible elements
+    return el.offsetParent !== null && !el.disabled;
+  });
+
+  if (focusArray.length === 0) return;
+
+  const currentIndex = focusArray.indexOf(document.activeElement);
+
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      const next = currentIndex <= 0 ? focusArray.length - 1 : currentIndex - 1;
+      focusArray[next].focus();
+    } else {
+      const next = currentIndex >= focusArray.length - 1 ? 0 : currentIndex + 1;
+      focusArray[next].focus();
+    }
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = currentIndex >= focusArray.length - 1 ? 0 : currentIndex + 1;
+    focusArray[next].focus();
+  }
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const next = currentIndex <= 0 ? focusArray.length - 1 : currentIndex - 1;
+    focusArray[next].focus();
+  }
+
+  // Enter toggles checkboxes
+  if (e.key === 'Enter' && document.activeElement?.type === 'checkbox') {
+    e.preventDefault();
+    document.activeElement.checked = !document.activeElement.checked;
+  }
+
+  // Enter on save button triggers save
+  if (e.key === 'Enter' && document.activeElement === btnSaveSettings) {
+    e.preventDefault();
+    saveSettings();
+  }
 }

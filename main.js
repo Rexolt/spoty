@@ -53,7 +53,9 @@ let config = {
     geminiApiKey: '',
     geminiModel: 'gemini-2.5-flash',
     ollamaUrl: 'http://localhost:11434',
-    ollamaModel: 'llama3.2'
+    ollamaModel: 'llama3.2',
+    saveHistory: false,
+    useContext: false
   },
   aliases: {},
   theme: 'dark',
@@ -61,6 +63,125 @@ let config = {
   hotkey: 'Alt+Space',
   autoLaunch: false
 };
+
+// AI conversation context (multi-turn chat messages)
+let conversationMessages = [];
+
+// AI Chat History
+const chatHistoryFile = path.join(configPath, 'ai_history.json');
+let chatHistory = [];
+
+function loadChatHistory() {
+  if (!config.ai.saveHistory) return;
+  try {
+    if (fs.existsSync(chatHistoryFile)) {
+      const data = fs.readFileSync(chatHistoryFile, 'utf8');
+      chatHistory = JSON.parse(data);
+      // Keep max 100 conversations
+      if (chatHistory.length > 100) {
+        chatHistory = chatHistory.slice(-100);
+        saveChatHistory();
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load chat history:', e);
+    chatHistory = [];
+  }
+}
+
+function saveChatHistory() {
+  if (!config.ai.saveHistory) return;
+  try {
+    if (!fs.existsSync(configPath)) {
+      fs.mkdirSync(configPath, { recursive: true });
+    }
+    fs.writeFileSync(chatHistoryFile, JSON.stringify(chatHistory, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Failed to save chat history:', e);
+  }
+}
+
+function addChatEntry(prompt, reply) {
+  if (!config.ai.saveHistory) return;
+  chatHistory.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    prompt,
+    reply,
+    time: new Date().toISOString(),
+    provider: config.ai.provider
+  });
+  if (chatHistory.length > 100) {
+    chatHistory.shift();
+  }
+  saveChatHistory();
+}
+
+// Safe math evaluator (replaces unsafe Function()/eval())
+function safeEvaluateMath(expr) {
+  // Tokenize: numbers, operators, parentheses
+  const tokens = expr.match(/(\d+\.?\d*|[+\-*/%()])/g);
+  if (!tokens) return null;
+
+  // Rebuild and verify — only allow safe characters
+  const cleaned = tokens.join('');
+  if (!/^[\d+\-*/%().]+$/.test(cleaned)) return null;
+
+  // Use a sandboxed approach: build an AST-style recursive descent parser
+  let pos = 0;
+
+  function parseExpression() {
+    let result = parseTerm();
+    while (pos < tokens.length && (tokens[pos] === '+' || tokens[pos] === '-')) {
+      const op = tokens[pos++];
+      const right = parseTerm();
+      result = op === '+' ? result + right : result - right;
+    }
+    return result;
+  }
+
+  function parseTerm() {
+    let result = parseFactor();
+    while (pos < tokens.length && (tokens[pos] === '*' || tokens[pos] === '/' || tokens[pos] === '%')) {
+      const op = tokens[pos++];
+      const right = parseFactor();
+      if (op === '*') result *= right;
+      else if (op === '/') { if (right === 0) throw new Error('Division by zero'); result /= right; }
+      else result %= right;
+    }
+    return result;
+  }
+
+  function parseFactor() {
+    // Handle unary minus
+    if (tokens[pos] === '-') {
+      pos++;
+      return -parseFactor();
+    }
+    if (tokens[pos] === '+') {
+      pos++;
+      return parseFactor();
+    }
+    if (tokens[pos] === '(') {
+      pos++; // skip '('
+      const result = parseExpression();
+      if (tokens[pos] !== ')') throw new Error('Mismatched parentheses');
+      pos++; // skip ')'
+      return result;
+    }
+    const num = parseFloat(tokens[pos]);
+    if (isNaN(num)) throw new Error('Invalid token');
+    pos++;
+    return num;
+  }
+
+  try {
+    const result = parseExpression();
+    if (pos !== tokens.length) return null; // Unconsumed tokens
+    return result;
+  } catch (e) {
+    return null;
+  }
+}
 
 function loadConfig() {
   try {
@@ -124,6 +245,7 @@ function saveConfig() {
 }
 
 loadConfig();
+loadChatHistory();
 
 // Pre-fetch exchange rates asynchronously
 async function fetchExchangeRates() {
@@ -132,7 +254,7 @@ async function fetchExchangeRates() {
     return exchangeRates; // 1 hour cache
   }
   try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
     if (data && data.rates) {
       exchangeRates = data.rates;
@@ -153,7 +275,7 @@ function createWindow() {
   const display = screen.getPrimaryDisplay();
   const { width, height } = display.workAreaSize;
 
-  mainWindow = new BrowserWindow({
+  const winOptions = {
     width: config.window.width,
     height: config.window.minHeight,
     x: Math.round((width - config.window.width) / 2),
@@ -169,10 +291,18 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
-  });
+  };
 
+  // macOS: use vibrancy for native frosted glass
+  if (isMac) {
+    winOptions.vibrancy = 'under-window';
+    winOptions.visualEffectState = 'active';
+  }
+
+  mainWindow = new BrowserWindow(winOptions);
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 }
 
@@ -203,6 +333,9 @@ function hideWindow() {
   mainWindow.hide();
   mainWindow.setSize(config.window.width, config.window.minHeight);
   mainWindow.webContents.send('window-hide');
+
+  // Reset AI conversation context on window hide
+  conversationMessages = [];
 }
 
 function resizeWindow(newHeight) {
@@ -293,7 +426,8 @@ async function getApplications() {
       '/usr/share/applications',
       path.join(os.homedir(), '.local/share/applications'),
       '/var/lib/flatpak/exports/share/applications',
-      path.join(os.homedir(), '.local/share/flatpak/exports/share/applications')
+      path.join(os.homedir(), '.local/share/flatpak/exports/share/applications'),
+      '/snap/bin' // Snap applications
     ];
 
     await Promise.all(dirs.map(async (dir) => {
@@ -676,7 +810,17 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('url-open', (_, url) => {
-    shell.openExternal(url);
+    // Security: only allow http/https URLs
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url);
+      } else {
+        console.warn('Blocked non-http URL:', url);
+      }
+    } catch (e) {
+      console.warn('Invalid URL blocked:', url);
+    }
     hideWindow();
   });
 
@@ -791,7 +935,7 @@ app.whenReady().then(async () => {
     // Calculator
     else if (config.search.enableCalculator && /^[\d+\-*/().\s%]+$/.test(query)) {
       try {
-        const result = Function(`return ${query}`)();
+        const result = safeEvaluateMath(query);
         if (isFinite(result)) {
           results.push({
             type: 'calc',
@@ -890,11 +1034,26 @@ app.whenReady().then(async () => {
       throw new Error("Nincs kiválasztva AI szolgáltató a beállításokban.");
     }
 
+    // Add user message to context if enabled
+    if (config.ai.useContext) {
+      conversationMessages.push({ role: 'user', content: prompt });
+      // Keep max 20 messages in context to avoid token limits
+      if (conversationMessages.length > 20) {
+        conversationMessages = conversationMessages.slice(-20);
+      }
+    }
+
+    let reply = '';
+
     try {
       if (config.ai.provider === 'openai') {
         if (!config.ai.openaiApiKey) {
           throw new Error("Nincs megadva OpenAI API kulcs a beállításokban.");
         }
+
+        const messages = config.ai.useContext
+          ? [...conversationMessages]
+          : [{ role: 'user', content: prompt }];
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -904,8 +1063,9 @@ app.whenReady().then(async () => {
           },
           body: JSON.stringify({
             model: config.ai.openaiModel || 'gpt-3.5-turbo',
-            messages: [{ role: 'user', content: prompt }]
-          })
+            messages
+          }),
+          signal: AbortSignal.timeout(30000)
         });
 
         if (!response.ok) {
@@ -914,7 +1074,7 @@ app.whenReady().then(async () => {
         }
 
         const data = await response.json();
-        return data.choices[0].message.content;
+        reply = data.choices[0].message.content;
 
       } else if (config.ai.provider === 'gemini') {
         if (!config.ai.geminiApiKey) {
@@ -923,16 +1083,23 @@ app.whenReady().then(async () => {
 
         const model = config.ai.geminiModel || 'gemini-2.5-flash';
         const apiKey = config.ai.geminiApiKey;
+
+        // Build conversation contents for Gemini
+        let contents;
+        if (config.ai.useContext) {
+          contents = conversationMessages.map(msg => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }]
+          }));
+        } else {
+          contents = [{ parts: [{ text: prompt }] }];
+        }
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }]
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents }),
+          signal: AbortSignal.timeout(30000)
         });
 
         if (!response.ok) {
@@ -943,23 +1110,44 @@ app.whenReady().then(async () => {
         const data = await response.json();
         const candidate = data.candidates?.[0];
         if (candidate && candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-          return candidate.content.parts[0].text;
+          reply = candidate.content.parts[0].text;
         } else {
           throw new Error("Nem értelmezhető válasz érkezett a Gemini API-tól.");
         }
       } else if (config.ai.provider === 'ollama') {
         const ollamaBaseUrl = config.ai.ollamaUrl || 'http://localhost:11434';
 
-        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+        // Security: validate Ollama URL
+        try {
+          const parsed = new URL(ollamaBaseUrl);
+          const allowedHosts = ['localhost', '127.0.0.1', '::1'];
+          if (!['http:', 'https:'].includes(parsed.protocol) || !allowedHosts.includes(parsed.hostname)) {
+            throw new Error('Invalid Ollama URL: only localhost is allowed');
+          }
+        } catch (urlErr) {
+          if (urlErr.message.includes('Invalid Ollama URL')) throw urlErr;
+          throw new Error('Érvénytelen Ollama URL formátum.');
+        }
+
+        // Ollama chat API with context support
+        const endpoint = config.ai.useContext ? '/api/chat' : '/api/generate';
+        const body = config.ai.useContext
+          ? {
+              model: config.ai.ollamaModel || 'llama3.2',
+              messages: conversationMessages,
+              stream: false
+            }
+          : {
+              model: config.ai.ollamaModel || 'llama3.2',
+              prompt: prompt,
+              stream: false
+            };
+
+        const response = await fetch(`${ollamaBaseUrl}${endpoint}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: config.ai.ollamaModel || 'llama3.2',
-            prompt: prompt,
-            stream: false
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(60000)
         });
 
         if (!response.ok) {
@@ -968,14 +1156,47 @@ app.whenReady().then(async () => {
         }
 
         const data = await response.json();
-        return data.response;
+        reply = config.ai.useContext ? data.message?.content : data.response;
       } else {
         throw new Error("Ismeretlen AI szolgáltató.");
       }
+
+      // Add assistant reply to context
+      if (config.ai.useContext) {
+        conversationMessages.push({ role: 'assistant', content: reply });
+      }
+
+      // Save to history if enabled
+      addChatEntry(prompt, reply);
+
+      return reply;
     } catch (e) {
+      // Remove the failed user message from context
+      if (config.ai.useContext && conversationMessages.length > 0) {
+        conversationMessages.pop();
+      }
       console.error("AI API error:", e);
       throw e;
     }
+  });
+
+  ipcMain.on('reset-ai-context', () => {
+    conversationMessages = [];
+  });
+
+  ipcMain.handle('get-chat-history', () => {
+    if (!config.ai.saveHistory) return [];
+    return chatHistory;
+  });
+
+  ipcMain.handle('delete-chat-history', (_, id) => {
+    if (id === '__all__') {
+      chatHistory = [];
+    } else {
+      chatHistory = chatHistory.filter(entry => entry.id !== id);
+    }
+    saveChatHistory();
+    return true;
   });
 
   ipcMain.handle('get-icon', async (_, iconName) => {
@@ -1008,6 +1229,17 @@ app.whenReady().then(async () => {
       config.ai.geminiModel = newSettings.ai.geminiModel || config.ai.geminiModel;
       config.ai.ollamaUrl = newSettings.ai.ollamaUrl || config.ai.ollamaUrl;
       config.ai.ollamaModel = newSettings.ai.ollamaModel || config.ai.ollamaModel;
+      config.ai.useContext = newSettings.ai.useContext === true;
+      const wasSaving = config.ai.saveHistory;
+      config.ai.saveHistory = newSettings.ai.saveHistory === true;
+      // If just enabled, load existing history; if just disabled, clear memory
+      if (!wasSaving && config.ai.saveHistory) {
+        loadChatHistory();
+      } else if (wasSaving && !config.ai.saveHistory) {
+        chatHistory = [];
+        // Delete the history file when user disables
+        try { if (fs.existsSync(chatHistoryFile)) fs.unlinkSync(chatHistoryFile); } catch (e) { }
+      }
     }
     saveConfig();
     registerHotkey();
