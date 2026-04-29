@@ -1,55 +1,31 @@
-## ✨ What's New in v3.2.0
+## 🔧 v3.2.1 — Bug Fixes & Professionalization
 
-### 💬 AI Conversation Context (Multi-turn Chat)
+### 🐛 Critical Fixes
 
-The AI now **remembers your previous messages** within a session — ask follow-up questions without repeating yourself.
+- **CSP compliance** — All inline `onclick`/`onmouseover` handlers replaced with CSP-safe event delegation. AI copy, chat history, and delete buttons now work correctly with the strict Content Security Policy.
+- **Calculator crash** — Fixed `safeEvaluateMath` returning `null` causing a `TypeError` (`isFinite(null)` is `true`, then `null.toString()` crashes). Added explicit null guard.
+- **macOS system commands** — Lock, sleep, shutdown, and restart now use native macOS commands (`osascript`, `pmset`) instead of Linux-specific `loginctl`/`systemctl`.
 
-- Works with **OpenAI**, **Google Gemini**, and **Ollama**
-- Toggleable: Settings → AI → *"Keep context (conversation)"*
-- **New conversation** button (`+`) in the header or `Ctrl+N` to reset
-- Context auto-clears when the window is hidden
-- Max 20 messages kept in context to stay within token limits
+### 🌐 Internationalization
 
-### ⌨️ Full Keyboard Navigation
+- **Full bilingual search results** — All hardcoded Hungarian strings in the main process (bookmark, file, weather, alias, terminal, web search, system command, calculator, clipboard, unit/currency converter labels) now respect the configured language (HU/EN).
+- **Currency formatting** — Locale-aware number formatting (`hu-HU` or `en-US`) based on language setting.
 
-The entire app is now 100% keyboard-accessible:
+### 🔒 Security & Stability
 
-| Shortcut | Action |
-|---|---|
-| `Ctrl+,` | Open / close Settings |
-| `Ctrl+N` | New AI conversation |
-| `Tab` / `↑↓` | Navigate settings fields |
-| `Enter` | Toggle checkboxes / Save |
-| `Escape` | Close settings or window |
-| `:focus-visible` | Blue outline on all interactive elements |
+- **Explicit `sandbox: true`** in `webPreferences` for defense-in-depth.
+- **Fixed `window-all-closed` handler** — Removed incorrect `e.preventDefault()` call (not a valid Electron API on this event).
 
-### 🖥️ Cross-Platform Optimizations
+### ✨ UX Improvements
 
-- **macOS**: Native frosted glass effect (`vibrancy: 'under-window'`)
-- **Linux**: Added Snap app search path (`/snap/bin`)
-- **All platforms**: Renderer runs in `sandbox: true` mode
-- **All platforms**: API timeouts added (5s exchange rates, 30s AI, 60s Ollama)
+- **Escape key** now clears both input text and displayed results (previously left stale results on screen).
+- **History delete button** hover effect moved to CSS (was previously inline JS, blocked by CSP).
 
-### 🎨 Settings UI Improvements
+### 🏗️ Project Quality
 
-- Reorganized header with dedicated action buttons
-- Smooth scrollbar in settings overlay
-- `:focus-within` highlight on setting rows
-- Better focus indicators across all themes
-
-### 🔒 Security Hardening
-
-- **Content Security Policy (CSP)** meta tag added
-- **CDN libraries pinned** to specific versions (`marked@15.0.7`, `dompurify@3.2.5`)
-- **Safe math evaluator** replaces `Function()`/`eval()` in calculator
-- **URL validation** on `shell.openExternal` (only `http://` and `https://`)
-- **Ollama SSRF protection** — only `localhost` connections allowed
-
-### ⚡ Performance
-
-- 5-minute memory cache for apps and bookmarks (reduced disk I/O)
-- Concurrent search with `Promise.all` (apps + files + bookmarks in parallel)
-- Background cache pre-warming on startup
+- Version synced to `3.2.1` across `package.json` and release notes.
+- Added `engines` field to `package.json` (`node >=18`, `npm >=9`).
+- Added `.editorconfig` for consistent code style across contributors.
 
 ---
 
