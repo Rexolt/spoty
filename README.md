@@ -7,7 +7,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Rexolt/spoty?style=for-the-badge&logo=github&color=0A84FF)](https://github.com/Rexolt/spoty/releases/latest)
 [![License](https://img.shields.io/github/license/Rexolt/spoty?style=for-the-badge&color=2ecc71a)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blueviolet?style=for-the-badge)](#installation)
-[![Electron](https://img.shields.io/badge/Electron-33-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-39-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 
 <br/>
 
