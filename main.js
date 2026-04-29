@@ -129,6 +129,13 @@ let conversationMessages = [];
 // AI Chat History
 const chatHistoryFile = path.join(configPath, 'ai_history.json');
 let chatHistory = [];
+const MAX_CONFIG_FILE_BYTES = 64 * 1024;
+const MAX_ALIAS_COUNT = 100;
+const MAX_ALIAS_KEY_LENGTH = 64;
+const MAX_ALIAS_VALUE_LENGTH = 512;
+const ALLOWED_LANGUAGES = ['hu', 'en'];
+const ALLOWED_THEMES = ['dark', 'light', 'ocean', 'forest', 'midnight'];
+const ALLOWED_AI_PROVIDERS = ['openai', 'gemini', 'ollama'];
 
 function loadChatHistory() {
   if (!config.ai.saveHistory) return;
@@ -158,6 +165,94 @@ function saveChatHistory() {
   } catch (e) {
     console.error('Failed to save chat history:', e);
   }
+}
+
+function validateSettings(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { ok: false, error: 'Invalid settings payload.' };
+  }
+
+  const safeSettings = {
+    language: config.language,
+    theme: config.theme,
+    hotkey: config.hotkey,
+    aliases: { ...config.aliases },
+    autoLaunch: config.autoLaunch === true,
+    enableFiles: config.search.enableFiles,
+    enableBookmarks: config.search.enableBookmarks,
+    enableWebSearch: config.search.enableWebSearch,
+    enableSysCommands: config.search.enableSysCommands,
+    enableCalculator: config.search.enableCalculator,
+    enableClipboard: config.search.enableClipboard,
+    maxResults: config.search.maxResults,
+    ai: {
+      provider: config.ai.provider,
+      openaiApiKey: config.ai.openaiApiKey,
+      openaiModel: config.ai.openaiModel,
+      geminiApiKey: config.ai.geminiApiKey,
+      geminiModel: config.ai.geminiModel,
+      ollamaUrl: config.ai.ollamaUrl,
+      ollamaModel: config.ai.ollamaModel,
+      saveHistory: config.ai.saveHistory,
+      useContext: config.ai.useContext
+    }
+  };
+
+  if (typeof input.hotkey === 'string' && input.hotkey.trim()) safeSettings.hotkey = input.hotkey.trim();
+  if (typeof input.autoLaunch === 'boolean') safeSettings.autoLaunch = input.autoLaunch;
+  if (typeof input.enableFiles === 'boolean') safeSettings.enableFiles = input.enableFiles;
+  if (typeof input.enableBookmarks === 'boolean') safeSettings.enableBookmarks = input.enableBookmarks;
+  if (typeof input.enableWebSearch === 'boolean') safeSettings.enableWebSearch = input.enableWebSearch;
+  if (typeof input.enableSysCommands === 'boolean') safeSettings.enableSysCommands = input.enableSysCommands;
+  if (typeof input.enableCalculator === 'boolean') safeSettings.enableCalculator = input.enableCalculator;
+  if (typeof input.enableClipboard === 'boolean') safeSettings.enableClipboard = input.enableClipboard;
+
+  if (ALLOWED_LANGUAGES.includes(input.language)) safeSettings.language = input.language;
+  if (ALLOWED_THEMES.includes(input.theme)) safeSettings.theme = input.theme;
+
+  const parsedMaxResults = Number(input.maxResults);
+  if (Number.isInteger(parsedMaxResults) && parsedMaxResults >= 1 && parsedMaxResults <= 50) {
+    safeSettings.maxResults = parsedMaxResults;
+  }
+
+  if (input.ai !== undefined) {
+    if (!input.ai || typeof input.ai !== 'object' || Array.isArray(input.ai)) {
+      return { ok: false, error: 'Invalid AI settings object.' };
+    }
+    if (ALLOWED_AI_PROVIDERS.includes(input.ai.provider)) safeSettings.ai.provider = input.ai.provider;
+    if (typeof input.ai.openaiApiKey === 'string') safeSettings.ai.openaiApiKey = input.ai.openaiApiKey.trim();
+    if (typeof input.ai.openaiModel === 'string' && input.ai.openaiModel.trim()) safeSettings.ai.openaiModel = input.ai.openaiModel.trim();
+    if (typeof input.ai.geminiApiKey === 'string') safeSettings.ai.geminiApiKey = input.ai.geminiApiKey.trim();
+    if (typeof input.ai.geminiModel === 'string' && input.ai.geminiModel.trim()) safeSettings.ai.geminiModel = input.ai.geminiModel.trim();
+    if (typeof input.ai.ollamaUrl === 'string' && input.ai.ollamaUrl.trim()) safeSettings.ai.ollamaUrl = input.ai.ollamaUrl.trim();
+    if (typeof input.ai.ollamaModel === 'string' && input.ai.ollamaModel.trim()) safeSettings.ai.ollamaModel = input.ai.ollamaModel.trim();
+    if (typeof input.ai.saveHistory === 'boolean') safeSettings.ai.saveHistory = input.ai.saveHistory;
+    if (typeof input.ai.useContext === 'boolean') safeSettings.ai.useContext = input.ai.useContext;
+  }
+
+  if (input.aliases !== undefined) {
+    if (!input.aliases || typeof input.aliases !== 'object' || Array.isArray(input.aliases)) {
+      return { ok: false, error: 'Aliases must be an object.' };
+    }
+    const entries = Object.entries(input.aliases);
+    if (entries.length > MAX_ALIAS_COUNT) {
+      return { ok: false, error: `Too many aliases. Maximum ${MAX_ALIAS_COUNT}.` };
+    }
+    const safeAliases = {};
+    for (const [k, v] of entries) {
+      if (typeof k !== 'string' || !k.trim() || k.length > MAX_ALIAS_KEY_LENGTH) continue;
+      if (typeof v !== 'string' || !v.trim() || v.length > MAX_ALIAS_VALUE_LENGTH) continue;
+      safeAliases[k.trim()] = v.trim();
+    }
+    safeSettings.aliases = safeAliases;
+  }
+
+  const serialized = JSON.stringify(safeSettings);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_CONFIG_FILE_BYTES) {
+    return { ok: false, error: 'Config is too large to save.' };
+  }
+
+  return { ok: true, safeSettings };
 }
 
 function addChatEntry(prompt, reply) {
@@ -1284,31 +1379,37 @@ app.whenReady().then(async () => {
     return config;
   });
 
-  ipcMain.on('save-settings', (_, newSettings) => {
-    config.hotkey = newSettings.hotkey || config.hotkey;
-    config.language = newSettings.language || config.language;
-    config.theme = newSettings.theme || config.theme;
-    config.autoLaunch = newSettings.autoLaunch === true;
+  ipcMain.on('save-settings', (event, newSettings) => {
+    const { ok, safeSettings, error } = validateSettings(newSettings);
+    if (!ok) {
+      event.reply('save-settings-result', { ok: false, error });
+      return;
+    }
+
+    config.hotkey = safeSettings.hotkey;
+    config.language = safeSettings.language;
+    config.theme = safeSettings.theme;
+    config.autoLaunch = safeSettings.autoLaunch === true;
     applyAutoLaunch(config.autoLaunch);
-    if (newSettings.aliases !== undefined) config.aliases = newSettings.aliases;
-    config.search.enableFiles = newSettings.enableFiles !== undefined ? newSettings.enableFiles : config.search.enableFiles;
-    config.search.enableBookmarks = newSettings.enableBookmarks !== undefined ? newSettings.enableBookmarks : config.search.enableBookmarks;
-    config.search.enableWebSearch = newSettings.enableWebSearch !== undefined ? newSettings.enableWebSearch : config.search.enableWebSearch;
-    config.search.enableSysCommands = newSettings.enableSysCommands !== undefined ? newSettings.enableSysCommands : config.search.enableSysCommands;
-    config.search.enableCalculator = newSettings.enableCalculator !== undefined ? newSettings.enableCalculator : config.search.enableCalculator;
-    config.search.enableClipboard = newSettings.enableClipboard !== undefined ? newSettings.enableClipboard : config.search.enableClipboard;
-    config.search.maxResults = newSettings.maxResults !== undefined ? parseInt(newSettings.maxResults, 10) : config.search.maxResults;
-    if (newSettings.ai) {
-      config.ai.provider = newSettings.ai.provider || config.ai.provider;
-      config.ai.openaiApiKey = newSettings.ai.openaiApiKey !== undefined ? newSettings.ai.openaiApiKey : config.ai.openaiApiKey;
-      config.ai.openaiModel = newSettings.ai.openaiModel || config.ai.openaiModel;
-      config.ai.geminiApiKey = newSettings.ai.geminiApiKey !== undefined ? newSettings.ai.geminiApiKey : config.ai.geminiApiKey;
-      config.ai.geminiModel = newSettings.ai.geminiModel || config.ai.geminiModel;
-      config.ai.ollamaUrl = newSettings.ai.ollamaUrl || config.ai.ollamaUrl;
-      config.ai.ollamaModel = newSettings.ai.ollamaModel || config.ai.ollamaModel;
-      config.ai.useContext = newSettings.ai.useContext === true;
+    config.aliases = safeSettings.aliases;
+    config.search.enableFiles = safeSettings.enableFiles;
+    config.search.enableBookmarks = safeSettings.enableBookmarks;
+    config.search.enableWebSearch = safeSettings.enableWebSearch;
+    config.search.enableSysCommands = safeSettings.enableSysCommands;
+    config.search.enableCalculator = safeSettings.enableCalculator;
+    config.search.enableClipboard = safeSettings.enableClipboard;
+    config.search.maxResults = safeSettings.maxResults;
+    if (safeSettings.ai) {
+      config.ai.provider = safeSettings.ai.provider;
+      config.ai.openaiApiKey = safeSettings.ai.openaiApiKey;
+      config.ai.openaiModel = safeSettings.ai.openaiModel;
+      config.ai.geminiApiKey = safeSettings.ai.geminiApiKey;
+      config.ai.geminiModel = safeSettings.ai.geminiModel;
+      config.ai.ollamaUrl = safeSettings.ai.ollamaUrl;
+      config.ai.ollamaModel = safeSettings.ai.ollamaModel;
+      config.ai.useContext = safeSettings.ai.useContext === true;
       const wasSaving = config.ai.saveHistory;
-      config.ai.saveHistory = newSettings.ai.saveHistory === true;
+      config.ai.saveHistory = safeSettings.ai.saveHistory === true;
       // If just enabled, load existing history; if just disabled, clear memory
       if (!wasSaving && config.ai.saveHistory) {
         loadChatHistory();
@@ -1320,6 +1421,7 @@ app.whenReady().then(async () => {
     }
     saveConfig();
     registerHotkey();
+    event.reply('save-settings-result', { ok: true, settings: safeSettings });
   });
 });
 

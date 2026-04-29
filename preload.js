@@ -6,7 +6,7 @@ const validSendChannels = [
   'reset-ai-context'
 ];
 const validInvokeChannels = ['search', 'ask-ai', 'get-icon', 'get-settings', 'get-chat-history', 'delete-chat-history'];
-const validOnChannels = ['window-show', 'window-hide'];
+const validOnChannels = ['window-show', 'window-hide', 'save-settings-result'];
 
 contextBridge.exposeInMainWorld('electron', {
   send: (channel, data) => {
