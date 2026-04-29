@@ -454,9 +454,22 @@ function saveSettings() {
     try {
       parsedAliases = JSON.parse(setAliases.value);
     } catch (e) {
-      console.warn("Invalid aliases JSON, keeping old.");
-      parsedAliases = appSettings.aliases || {};
+      alert('Invalid aliases JSON format.');
+      return;
     }
+  }
+  if (!parsedAliases || typeof parsedAliases !== 'object' || Array.isArray(parsedAliases)) {
+    alert('Aliases must be a JSON object.');
+    return;
+  }
+  if (Object.keys(parsedAliases).length > 100) {
+    alert('Too many aliases (maximum 100).');
+    return;
+  }
+  const maxResults = parseInt(setMaxResults.value, 10);
+  if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 50) {
+    alert('Max results must be a number between 1 and 50.');
+    return;
   }
 
   const newSettings = {
@@ -471,7 +484,7 @@ function saveSettings() {
     enableSysCommands: setEnableSys ? setEnableSys.checked : true,
     enableCalculator: setEnableCalc ? setEnableCalc.checked : true,
     enableClipboard: setEnableClip ? setEnableClip.checked : true,
-    maxResults: parseInt(setMaxResults.value, 10),
+    maxResults,
     ai: {
       provider: setAiProvider.value,
       openaiApiKey: setOpenaiApiKey.value,
@@ -486,6 +499,14 @@ function saveSettings() {
   };
 
   window.electron.send('save-settings', newSettings);
+}
+
+window.electron.on('save-settings-result', (result) => {
+  if (!result || !result.ok) {
+    alert(`Failed to save settings: ${result?.error || 'Unknown error'}`);
+    return;
+  }
+  const newSettings = result.settings;
   appSettings.language = newSettings.language;
   appSettings.theme = newSettings.theme;
   appSettings.hotkey = newSettings.hotkey;
@@ -508,20 +529,12 @@ function saveSettings() {
   appSettings.ai.ollamaModel = newSettings.ai.ollamaModel;
   appSettings.ai.saveHistory = newSettings.ai.saveHistory;
   appSettings.ai.useContext = newSettings.ai.useContext;
-
-  // Update new-chat button visibility
-  if (isAiMode && appSettings.ai.useContext) {
-    btnNewChat.style.display = 'flex';
-  } else {
-    btnNewChat.style.display = 'none';
-  }
-
-  // Apply immediately
+  if (isAiMode && appSettings.ai.useContext) btnNewChat.style.display = 'flex';
+  else btnNewChat.style.display = 'none';
   translateUI(appSettings.language);
   applyTheme(appSettings.theme);
-
   hideSettings();
-}
+});
 
 function handleSearchInput(e) {
   const query = e.target.value;
