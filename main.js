@@ -1,6 +1,6 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, shell, screen, clipboard, dialog } = require('electron');
 const path = require('path');
-const { exec, execFile } = require('child_process');
+const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const Fuse = require('fuse.js');
@@ -10,6 +10,85 @@ const isLinux = process.platform === 'linux';
 const isMac = process.platform === 'darwin';
 
 const iconPath = path.join(__dirname, 'build', 'icons', isWindows ? 'icon.ico' : '512x512.png');
+
+
+const ALLOWED_ACTIONS = {
+  open_settings: { windows: null, mac: null, linux: null },
+  lock_screen: {
+    windows: { binary: 'rundll32.exe', args: ['user32.dll,LockWorkStation'] },
+    mac: { binary: 'osascript', args: ['-e', 'tell application "System Events" to keystroke "q" using {command down, control down}'] },
+    linux: { binary: 'loginctl', args: ['lock-session'] }
+  },
+  sleep: {
+    windows: { binary: 'rundll32.exe', args: ['powrprof.dll,SetSuspendState', '0,1,0'] },
+    mac: { binary: 'pmset', args: ['sleepnow'] },
+    linux: { binary: 'systemctl', args: ['suspend'] }
+  },
+  shutdown: {
+    windows: { binary: 'shutdown', args: ['/s', '/t', '0'] },
+    mac: { binary: 'osascript', args: ['-e', 'tell app "System Events" to shut down'] },
+    linux: { binary: 'systemctl', args: ['poweroff'] }
+  },
+  restart: {
+    windows: { binary: 'shutdown', args: ['/r', '/t', '0'] },
+    mac: { binary: 'osascript', args: ['-e', 'tell app "System Events" to restart'] },
+    linux: { binary: 'systemctl', args: ['reboot'] }
+  }
+};
+
+function normalizeAction(action) {
+  if (!action) return null;
+
+  if (typeof action === 'string') {
+    return { type: 'syscommand', id: action };
+  }
+
+  if (typeof action === 'object' && action.type === 'syscommand' && typeof action.id === 'string') {
+    return action;
+  }
+
+  return null;
+}
+
+function runSafeCommand(action) {
+  const normalized = normalizeAction(action);
+  if (!normalized) {
+    console.warn('Blocked invalid action payload:', action);
+    return false;
+  }
+
+  if (normalized.type !== 'syscommand') {
+    console.warn('Blocked unsupported action type:', normalized.type);
+    return false;
+  }
+
+  const spec = ALLOWED_ACTIONS[normalized.id];
+  if (!spec) {
+    console.warn('Blocked unknown command identifier:', normalized.id);
+    return false;
+  }
+
+  if (normalized.id === 'open_settings') {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('open-settings');
+    }
+    return true;
+  }
+
+  const osSpec = isWindows ? spec.windows : isMac ? spec.mac : spec.linux;
+  if (!osSpec) {
+    console.warn(`Blocked command "${normalized.id}" on unsupported OS.`);
+    return false;
+  }
+
+  execFile(osSpec.binary, osSpec.args, (err) => {
+    if (err) {
+      console.warn(`Failed to execute command "${normalized.id}":`, err.message);
+    }
+  });
+
+  return true;
+}
 
 
 let mainWindow;
@@ -896,18 +975,20 @@ app.whenReady().then(async () => {
     setTimeout(hideWindow, 300);
   });
 
-  ipcMain.on('command-run', (_, command) => {
-    exec(command);
+  ipcMain.on('command-run', (_, action) => {
+    runSafeCommand(action);
     hideWindow();
   });
 
-  ipcMain.on('alias-run', (_, commands) => {
-    commands.forEach(cmd => {
-      if (cmd.startsWith('http://') || cmd.startsWith('https://')) {
-        shell.openExternal(cmd);
-      } else {
-        exec(cmd);
-      }
+  ipcMain.on('alias-run', (_, actions) => {
+    if (!Array.isArray(actions)) {
+      console.warn('Blocked invalid alias payload:', actions);
+      hideWindow();
+      return;
+    }
+
+    actions.forEach(action => {
+      runSafeCommand(action);
     });
     hideWindow();
   });
@@ -953,19 +1034,8 @@ app.whenReady().then(async () => {
       });
     }
 
-    if (query.startsWith('>')) {
-      const cmd = query.substring(1).trim();
-      if (cmd) {
-        results.push({
-          type: 'command',
-          name: `${t('run')}: ${cmd}`,
-          command: cmd,
-          description: t('terminalCommand')
-        });
-      }
-    }
     // Web search checking
-    else if (config.search.enableWebSearch && (query.startsWith('g ') || query.startsWith('? '))) {
+    if (config.search.enableWebSearch && (query.startsWith('g ') || query.startsWith('? '))) {
       const webQuery = query.substring(2).trim();
       if (webQuery) {
         results.push({
@@ -986,26 +1056,26 @@ app.whenReady().then(async () => {
       if (['restart', 'újraindítás'].includes(q)) cmdName = t('restart');
 
       if (isWindows) {
-        if (['lock', 'zár'].includes(q)) cmdAction = 'rundll32.exe user32.dll,LockWorkStation';
-        if (['sleep', 'alvás'].includes(q)) cmdAction = 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0';
-        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'shutdown /s /t 0';
-        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'shutdown /r /t 0';
+        if (['lock', 'zár'].includes(q)) cmdAction = 'lock_screen';
+        if (['sleep', 'alvás'].includes(q)) cmdAction = 'sleep';
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'shutdown';
+        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'restart';
       } else if (isMac) {
-        if (['lock', 'zár'].includes(q)) cmdAction = 'osascript -e \'tell application "System Events" to keystroke "q" using {command down, control down}\''; 
-        if (['sleep', 'alvás'].includes(q)) cmdAction = 'pmset sleepnow';
-        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'osascript -e \'tell app "System Events" to shut down\'';
-        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'osascript -e \'tell app "System Events" to restart\'';
+        if (['lock', 'zár'].includes(q)) cmdAction = 'lock_screen';
+        if (['sleep', 'alvás'].includes(q)) cmdAction = 'sleep';
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'shutdown';
+        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'restart';
       } else {
-        if (['lock', 'zár'].includes(q)) cmdAction = 'loginctl lock-session';
-        if (['sleep', 'alvás'].includes(q)) cmdAction = 'systemctl suspend';
-        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'systemctl poweroff';
-        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'systemctl reboot';
+        if (['lock', 'zár'].includes(q)) cmdAction = 'lock_screen';
+        if (['sleep', 'alvás'].includes(q)) cmdAction = 'sleep';
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'shutdown';
+        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'restart';
       }
 
       results.push({
         type: 'syscommand',
         name: cmdName,
-        command: cmdAction,
+        action: { type: 'syscommand', id: cmdAction },
         description: `${t('sysCommand')} (${q})`
       });
     }

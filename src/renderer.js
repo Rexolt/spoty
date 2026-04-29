@@ -432,7 +432,7 @@ function populateSettingsUI(config) {
   if (setEnableCalc) setEnableCalc.checked = config.search.enableCalculator !== false;
   if (setEnableClip) setEnableClip.checked = config.search.enableClipboard !== false;
   if (setMaxResults) setMaxResults.value = config.search.maxResults || 8;
-  if (setAliases) setAliases.value = JSON.stringify(config.aliases || {}, null, 2);
+  if (setAliases) setAliases.value = JSON.stringify(normalizeAliasActions(config.aliases || {}), null, 2);
 
   if (setAiProvider) setAiProvider.value = config.ai.provider || 'openai';
   setOpenaiApiKey.value = config.ai.openaiApiKey || '';
@@ -448,14 +448,29 @@ function populateSettingsUI(config) {
   setAiProvider.dispatchEvent(new Event('change'));
 }
 
+
+function normalizeAliasActions(aliases) {
+  const normalizedAliases = {};
+  Object.entries(aliases || {}).forEach(([key, value]) => {
+    const arr = Array.isArray(value) ? value : [value];
+    normalizedAliases[key] = arr.map(action => {
+      if (typeof action === 'string') {
+        return { type: 'syscommand', id: action };
+      }
+      return action;
+    }).filter(action => action && typeof action === 'object');
+  });
+  return normalizedAliases;
+}
+
 function saveSettings() {
   let parsedAliases = {};
   if (setAliases) {
     try {
-      parsedAliases = JSON.parse(setAliases.value);
+      parsedAliases = normalizeAliasActions(JSON.parse(setAliases.value));
     } catch (e) {
       console.warn("Invalid aliases JSON, keeping old.");
-      parsedAliases = appSettings.aliases || {};
+      parsedAliases = normalizeAliasActions(appSettings.aliases || {});
     }
   }
 
@@ -978,7 +993,7 @@ function executeCommand(item, showFolder = false) {
       break;
     case 'command':
     case 'syscommand':
-      window.electron.send('command-run', item.command);
+      window.electron.send('command-run', item.action);
       break;
     case 'alias':
       window.electron.send('alias-run', item.commands);
