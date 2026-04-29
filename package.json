@@ -1,6 +1,6 @@
 {
   "name": "spoty",
-  "version": "3.2.1",
+  "version": "3.2.3",
   "description": "Modern Spotlight-like search & launcher app for Windows, Linux and macOS",
   "main": "main.js",
   "homepage": "https://github.com/Rexolt/spoty",

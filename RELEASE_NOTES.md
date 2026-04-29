@@ -1,22 +1,24 @@
-## ✨ v3.2.2 — Tabbed Settings & Electron 35
+## 🔒 v3.2.3 — Security Hardening
 
-### 🎨 New Tabbed Settings UI
+### 🛡️ Hardened Command Execution
 
-- **Tabbed layout** — Settings reorganized into 5 tabs: General, Search, Modules, AI, Aliases.
-- **Keyboard navigation** — Number keys `1`–`5` to switch tabs, Arrow Left/Right to cycle tabs, Tab/Shift+Tab to cycle inputs, `Ctrl+S` to save, `Escape` to close.
-- **Focus management** — Auto-focuses first input when opening a tab; arrow-key tab switching keeps focus on the tab bar for consecutive navigation.
+- **Shell injection prevention** — Replaced all `exec()` calls with `execFile()` using an allowlisted set of system commands (`lock_screen`, `sleep`, `shutdown`, `restart`), each with OS-specific binary+args — no shell is spawned.
+- **Structured actions** — System commands now use structured `{ type: 'syscommand', id: '...' }` action objects instead of raw command strings, preventing arbitrary command injection via IPC.
+- **Removed `>` terminal path** — The `> command` search prefix that allowed arbitrary shell execution from the search bar has been removed.
+- **URL-safe aliases** — Legacy string-based aliases are automatically migrated to structured action objects; HTTP/HTTPS URLs are preserved as `{ type: 'url' }` actions and opened safely via `shell.openExternal()`.
 
-### 🐛 Bug Fixes
+### ✅ Settings Validation & Safe Persistence
 
-- **Arrow key tab navigation** — Fixed tab switching via arrow keys only working once (focus was incorrectly moved to panel input instead of staying on tab button).
-- **Ctrl+S event propagation** — Added `stopPropagation()` to prevent potential conflicts with main keyboard handler.
-- **Dead CSS class cleanup** — Removed unused `light-mode` class toggling in theme application.
+- **Server-side validation** — New `validateSettings()` in the main process enforces type checks, enum validation (language, theme, AI provider), and range checks (`maxResults` 1–50).
+- **DoS protection** — Config file size limit, max alias count (100), and max alias key/value lengths prevent oversized payloads.
+- **Two-way confirmation** — Settings are now only applied in the renderer after the main process confirms success via `save-settings-result`, with error feedback on validation failure.
+- **Client-side guards** — Renderer validates alias JSON format, alias count, and maxResults range before sending to main.
 
-### ⬆️ Upgrades
+### 🧠 AI Context Integrity
 
-- **Electron 35** — Upgraded from Electron 33 to 35.0.0.
-- **AI model defaults** — Auto-upgrade `gpt-3.5-turbo` → `gpt-4o-mini`, `gemini-1.5-flash` → `gemini-2.5-flash`, `gemini-1.5-pro` → `gemini-2.5-pro`.
-- Updated AI model options in settings UI (GPT-4o, GPT-4.1, Gemini 2.5 variants).
+- **Request serialization** — Concurrent `ask-ai` calls are now queued via a promise chain, preventing race conditions that could corrupt the shared conversation context.
+- **Precise error cleanup** — Failed AI requests are cleaned up by exact tracked index instead of a blind `.pop()`, avoiding removal of unrelated messages.
+- **Context invariant checks** — Debug-time validation ensures user/assistant roles alternate correctly and flags anomalies.
 
 ---
 
