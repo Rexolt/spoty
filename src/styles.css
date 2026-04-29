@@ -1095,13 +1095,123 @@ body.theme-light .close-settings:hover {
   background: rgba(0, 0, 0, 0.1);
 }
 
-.settings-content {
+/* -- SETTINGS TABBED LAYOUT -- */
+.settings-body {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.settings-tabs {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 2px;
+  padding: 12px 6px;
+  border-right: 1px solid var(--border-color);
+  width: 140px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  white-space: nowrap;
+  position: relative;
+}
+
+.settings-tab:hover {
+  background: var(--selection-bg);
+  color: var(--text-main);
+}
+
+.settings-tab.active {
+  background: var(--selection-bg);
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.settings-tab.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 0 3px 3px 0;
+}
+
+.settings-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.settings-tab svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.settings-tab.active svg {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.tab-kbd {
+  margin-left: auto;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-family: inherit;
+  line-height: 1.4;
+  opacity: 0.5;
+}
+
+body.theme-light .tab-kbd {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.settings-panels {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  min-height: 0;
+}
+
+.settings-panel {
+  display: none;
+  animation: settingsPanelIn 0.25s ease-out;
+}
+
+.settings-panel.active {
+  display: block;
+}
+
+@keyframes settingsPanelIn {
+  0% {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .setting-group {
@@ -1180,10 +1290,22 @@ body.theme-light .select-input:focus {
 }
 
 .settings-footer {
-  padding: 16px 20px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border-color);
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-footer-hints {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-footer-hints .footer-hint {
+  font-size: 10px;
 }
 
 .primary-btn {
@@ -1223,7 +1345,7 @@ body.theme-light .select-input:focus {
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-body.light-mode .toggle-switch {
+body.theme-light .toggle-switch {
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -1309,27 +1431,26 @@ textarea:focus-visible {
   border-radius: var(--radius-item);
 }
 
-/* -- SETTINGS OVERLAY SCROLL -- */
-.settings-content {
-  overflow-y: auto;
+/* -- SETTINGS PANEL SCROLL -- */
+.settings-panels {
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
 }
 
-.settings-content::-webkit-scrollbar {
+.settings-panels::-webkit-scrollbar {
   width: 6px;
 }
 
-.settings-content::-webkit-scrollbar-track {
+.settings-panels::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.settings-content::-webkit-scrollbar-thumb {
+.settings-panels::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
 }
 
-.settings-content::-webkit-scrollbar-thumb:hover {
+.settings-panels::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
