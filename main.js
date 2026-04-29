@@ -127,6 +127,32 @@ function t(key) {
 let conversationMessages = [];
 
 // AI Chat History
+
+// In-flight AI context tracking + serialization queue
+let aiRequestCounter = 0;
+const pendingAiContextRequests = new Map(); // requestId -> userMessageIndex
+let aiRequestQueue = Promise.resolve();
+
+function validateConversationContextInvariant(sourceTag = 'unknown') {
+  if (!config.ai.useContext || conversationMessages.length === 0) return;
+
+  // Invariant: roles should alternate user->assistant in pairs.
+  let anomalies = [];
+  for (let i = 0; i < conversationMessages.length; i++) {
+    const expectedRole = i % 2 === 0 ? 'user' : 'assistant';
+    if (conversationMessages[i].role !== expectedRole) {
+      anomalies.push(`index ${i} expected ${expectedRole} got ${conversationMessages[i].role}`);
+    }
+  }
+
+  if (conversationMessages.length % 2 !== 0) {
+    anomalies.push(`odd message count (${conversationMessages.length})`);
+  }
+
+  if (anomalies.length > 0) {
+    console.warn(`[AI context invariant] anomaly @${sourceTag}: ${anomalies.join('; ')}`);
+  }
+}
 const chatHistoryFile = path.join(configPath, 'ai_history.json');
 let chatHistory = [];
 
@@ -1107,22 +1133,36 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('ask-ai', async (_, prompt) => {
-    if (!config.ai || !config.ai.provider) {
-      throw new Error("Nincs kiválasztva AI szolgáltató a beállításokban.");
-    }
-
-    // Add user message to context if enabled
-    if (config.ai.useContext) {
-      conversationMessages.push({ role: 'user', content: prompt });
-      // Keep max 20 messages in context to avoid token limits
-      if (conversationMessages.length > 20) {
-        conversationMessages = conversationMessages.slice(-20);
+    return aiRequestQueue = aiRequestQueue.then(async () => {
+      if (!config.ai || !config.ai.provider) {
+        throw new Error("Nincs kiválasztva AI szolgáltató a beállításokban.");
       }
-    }
 
-    let reply = '';
+      const requestId = `${Date.now().toString(36)}-${(++aiRequestCounter).toString(36)}`;
+      let reply = '';
 
-    try {
+      // Add user message to context if enabled, and track exact index for this request
+      if (config.ai.useContext) {
+        conversationMessages.push({ role: 'user', content: prompt });
+        pendingAiContextRequests.set(requestId, conversationMessages.length - 1);
+
+        // Keep max 20 messages in context to avoid token limits
+        if (conversationMessages.length > 20) {
+          const trimCount = conversationMessages.length - 20;
+          conversationMessages = conversationMessages.slice(-20);
+
+          // Re-map pending indexes after trim
+          for (const [id, idx] of pendingAiContextRequests.entries()) {
+            const nextIdx = idx - trimCount;
+            if (nextIdx < 0) pendingAiContextRequests.delete(id);
+            else pendingAiContextRequests.set(id, nextIdx);
+          }
+        }
+
+        validateConversationContextInvariant(`pre-request:${requestId}`);
+      }
+
+      try {
       if (config.ai.provider === 'openai') {
         if (!config.ai.openaiApiKey) {
           throw new Error("Nincs megadva OpenAI API kulcs a beállításokban.");
@@ -1238,23 +1278,38 @@ app.whenReady().then(async () => {
         throw new Error("Ismeretlen AI szolgáltató.");
       }
 
-      // Add assistant reply to context
-      if (config.ai.useContext) {
-        conversationMessages.push({ role: 'assistant', content: reply });
-      }
+        // Add assistant reply to context
+        if (config.ai.useContext) {
+          conversationMessages.push({ role: 'assistant', content: reply });
+          pendingAiContextRequests.delete(requestId);
+          validateConversationContextInvariant(`success:${requestId}`);
+        }
 
-      // Save to history if enabled
-      addChatEntry(prompt, reply);
+        // Save to history if enabled
+        addChatEntry(prompt, reply);
 
-      return reply;
-    } catch (e) {
-      // Remove the failed user message from context
-      if (config.ai.useContext && conversationMessages.length > 0) {
-        conversationMessages.pop();
+        return reply;
+      } catch (e) {
+        // Remove the failed user message from context by exact request mapping
+        if (config.ai.useContext) {
+          const failedUserIndex = pendingAiContextRequests.get(requestId);
+          if (typeof failedUserIndex === 'number' && failedUserIndex >= 0 && failedUserIndex < conversationMessages.length) {
+            const failedMsg = conversationMessages[failedUserIndex];
+            if (failedMsg && failedMsg.role === 'user' && failedMsg.content === prompt) {
+              conversationMessages.splice(failedUserIndex, 1);
+            } else {
+              console.warn(`[AI context cleanup] mapped request ${requestId} points to unexpected message; index=${failedUserIndex}`);
+            }
+          } else {
+            console.warn(`[AI context cleanup] missing or invalid mapping for failed request ${requestId}`);
+          }
+          pendingAiContextRequests.delete(requestId);
+          validateConversationContextInvariant(`error:${requestId}`);
+        }
+        console.error("AI API error:", e);
+        throw e;
       }
-      console.error("AI API error:", e);
-      throw e;
-    }
+    });
   });
 
   ipcMain.on('reset-ai-context', () => {
