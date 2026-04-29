@@ -1,31 +1,22 @@
-## 🔧 v3.2.1 — Bug Fixes & Professionalization
+## ✨ v3.2.2 — Tabbed Settings & Electron 35
 
-### 🐛 Critical Fixes
+### 🎨 New Tabbed Settings UI
 
-- **CSP compliance** — All inline `onclick`/`onmouseover` handlers replaced with CSP-safe event delegation. AI copy, chat history, and delete buttons now work correctly with the strict Content Security Policy.
-- **Calculator crash** — Fixed `safeEvaluateMath` returning `null` causing a `TypeError` (`isFinite(null)` is `true`, then `null.toString()` crashes). Added explicit null guard.
-- **macOS system commands** — Lock, sleep, shutdown, and restart now use native macOS commands (`osascript`, `pmset`) instead of Linux-specific `loginctl`/`systemctl`.
+- **Tabbed layout** — Settings reorganized into 5 tabs: General, Search, Modules, AI, Aliases.
+- **Keyboard navigation** — Number keys `1`–`5` to switch tabs, Arrow Left/Right to cycle tabs, Tab/Shift+Tab to cycle inputs, `Ctrl+S` to save, `Escape` to close.
+- **Focus management** — Auto-focuses first input when opening a tab; arrow-key tab switching keeps focus on the tab bar for consecutive navigation.
 
-### 🌐 Internationalization
+### 🐛 Bug Fixes
 
-- **Full bilingual search results** — All hardcoded Hungarian strings in the main process (bookmark, file, weather, alias, terminal, web search, system command, calculator, clipboard, unit/currency converter labels) now respect the configured language (HU/EN).
-- **Currency formatting** — Locale-aware number formatting (`hu-HU` or `en-US`) based on language setting.
+- **Arrow key tab navigation** — Fixed tab switching via arrow keys only working once (focus was incorrectly moved to panel input instead of staying on tab button).
+- **Ctrl+S event propagation** — Added `stopPropagation()` to prevent potential conflicts with main keyboard handler.
+- **Dead CSS class cleanup** — Removed unused `light-mode` class toggling in theme application.
 
-### 🔒 Security & Stability
+### ⬆️ Upgrades
 
-- **Explicit `sandbox: true`** in `webPreferences` for defense-in-depth.
-- **Fixed `window-all-closed` handler** — Removed incorrect `e.preventDefault()` call (not a valid Electron API on this event).
-
-### ✨ UX Improvements
-
-- **Escape key** now clears both input text and displayed results (previously left stale results on screen).
-- **History delete button** hover effect moved to CSS (was previously inline JS, blocked by CSP).
-
-### 🏗️ Project Quality
-
-- Version synced to `3.2.1` across `package.json` and release notes.
-- Added `engines` field to `package.json` (`node >=18`, `npm >=9`).
-- Added `.editorconfig` for consistent code style across contributors.
+- **Electron 35** — Upgraded from Electron 33 to 35.0.0.
+- **AI model defaults** — Auto-upgrade `gpt-3.5-turbo` → `gpt-4o-mini`, `gemini-1.5-flash` → `gemini-2.5-flash`, `gemini-1.5-pro` → `gemini-2.5-pro`.
+- Updated AI model options in settings UI (GPT-4o, GPT-4.1, Gemini 2.5 variants).
 
 ---
 
