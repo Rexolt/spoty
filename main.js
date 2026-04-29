@@ -49,7 +49,7 @@ let config = {
   ai: {
     provider: 'openai',
     openaiApiKey: '',
-    openaiModel: 'gpt-3.5-turbo',
+    openaiModel: 'gpt-4o-mini',
     geminiApiKey: '',
     geminiModel: 'gemini-2.5-flash',
     ollamaUrl: 'http://localhost:11434',
@@ -271,11 +271,16 @@ function loadConfig() {
       // Backwards compat for old AI config
       if (loaded.ai && loaded.ai.apiKey && !loaded.ai.openaiApiKey) {
         config.ai.openaiApiKey = loaded.ai.apiKey;
-        config.ai.openaiModel = loaded.ai.model || 'gpt-3.5-turbo';
+        config.ai.openaiModel = loaded.ai.model || 'gpt-4o-mini';
 
         // Clean up old keys
         delete config.ai.apiKey;
         delete config.ai.model;
+      }
+
+      // Auto upgrade deprecated OpenAI models
+      if (config.ai.openaiModel === 'gpt-3.5-turbo') {
+        config.ai.openaiModel = 'gpt-4o-mini';
       }
 
       // Auto upgrade deprecated gemini models
@@ -1134,7 +1139,7 @@ app.whenReady().then(async () => {
             'Authorization': `Bearer ${config.ai.openaiApiKey}`
           },
           body: JSON.stringify({
-            model: config.ai.openaiModel || 'gpt-3.5-turbo',
+            model: config.ai.openaiModel || 'gpt-4o-mini',
             messages
           }),
           signal: AbortSignal.timeout(30000)

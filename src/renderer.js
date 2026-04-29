@@ -13,6 +13,7 @@ const btnSettings = document.getElementById('btn-settings');
 const settingsOverlay = document.getElementById('settings-overlay');
 const btnCloseSettings = document.getElementById('btn-close-settings');
 const btnSaveSettings = document.getElementById('btn-save-settings');
+const settingsTabs = document.getElementById('settings-tabs');
 
 const setHotkey = document.getElementById('set-hotkey');
 const setAutoLaunch = document.getElementById('set-autolaunch');
@@ -109,7 +110,11 @@ const i18n = {
     ai_history_back: "Vissza",
     ai_new_chat: "Új beszélgetés",
     ai_context_on: "Kontextus be",
-    ai_context_hint: "Az AI emlékszik a korábbi üzeneteidre ebben a munkamenetben"
+    ai_context_hint: "Az AI emlékszik a korábbi üzeneteidre ebben a munkamenetben",
+    settings_aliases_tab: "Aliasok",
+    settings_search_tab: "Keresés",
+    settings_modules_tab: "Modulok",
+    settings_nav_tabs: "Váltás"
   },
   en: {
     tab_search: "Search",
@@ -171,7 +176,11 @@ const i18n = {
     ai_history_back: "Back",
     ai_new_chat: "New conversation",
     ai_context_on: "Context on",
-    ai_context_hint: "The AI remembers your previous messages in this session"
+    ai_context_hint: "The AI remembers your previous messages in this session",
+    settings_aliases_tab: "Aliases",
+    settings_search_tab: "Search",
+    settings_modules_tab: "Modules",
+    settings_nav_tabs: "Switch"
   }
 };
 
@@ -205,13 +214,6 @@ function translateUI(lang) {
 function applyTheme(theme) {
   // Remove existing theme classes
   document.body.classList.remove('theme-dark', 'theme-light', 'theme-ocean', 'theme-forest', 'theme-midnight');
-
-  // To keep backward compatibility with explicit styling if needed, though light mode is just a theme here
-  if (theme === 'light') {
-    document.body.classList.add('light-mode');
-  } else {
-    document.body.classList.remove('light-mode');
-  }
 
   document.body.classList.add(`theme-${theme}`);
 }
@@ -304,6 +306,12 @@ function setupEventListeners() {
   // New Chat button
   btnNewChat.addEventListener('click', resetAiContext);
 
+  // Settings tab click switching
+  settingsTabs.addEventListener('click', (e) => {
+    const tab = e.target.closest('.settings-tab');
+    if (tab) switchSettingsTab(tab.dataset.tab);
+  });
+
   // Settings keyboard navigation
   settingsOverlay.addEventListener('keydown', handleSettingsKeyboard);
 
@@ -378,7 +386,31 @@ function switchMode(mode) {
 
 function showSettings() {
   settingsOverlay.style.display = 'flex';
+  switchSettingsTab('general');
   updateWindowSizeForSettings();
+}
+
+function switchSettingsTab(tabName, focusPanel = true) {
+  // Update tab buttons
+  settingsTabs.querySelectorAll('.settings-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  // Update panels
+  settingsOverlay.querySelectorAll('.settings-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.panel === tabName);
+  });
+  if (focusPanel) {
+    // Focus first focusable element inside the active panel
+    const activePanel = settingsOverlay.querySelector(`.settings-panel[data-panel="${tabName}"]`);
+    if (activePanel) {
+      const firstInput = activePanel.querySelector('input, select, textarea');
+      if (firstInput) firstInput.focus();
+    }
+  } else {
+    // Keep focus on the tab button (for arrow-key navigation)
+    const tabBtn = settingsTabs.querySelector(`.settings-tab[data-tab="${tabName}"]`);
+    if (tabBtn) tabBtn.focus();
+  }
 }
 
 function hideSettings() {
@@ -404,7 +436,7 @@ function populateSettingsUI(config) {
 
   if (setAiProvider) setAiProvider.value = config.ai.provider || 'openai';
   setOpenaiApiKey.value = config.ai.openaiApiKey || '';
-  setOpenaiModel.value = config.ai.openaiModel || 'gpt-3.5-turbo';
+  setOpenaiModel.value = config.ai.openaiModel || 'gpt-4o-mini';
   setGeminiApiKey.value = config.ai.geminiApiKey || '';
   setGeminiModel.value = config.ai.geminiModel || 'gemini-2.5-flash';
   if (setOllamaUrl) setOllamaUrl.value = config.ai.ollamaUrl || 'http://localhost:11434';
@@ -1115,7 +1147,7 @@ function updateWindowSize() {
 
 function updateWindowSizeForSettings() {
   // Fixed size when settings page is open
-  window.electron.send('window-resize', 500);
+  window.electron.send('window-resize', 520);
 }
 
 // Reset AI conversation context
@@ -1145,6 +1177,8 @@ function resetAiContext() {
 
 // Keyboard navigation inside settings overlay
 function handleSettingsKeyboard(e) {
+  const tabNames = ['general', 'search', 'modules', 'ai', 'aliases'];
+
   if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
@@ -1152,46 +1186,87 @@ function handleSettingsKeyboard(e) {
     return;
   }
 
-  // Get all focusable elements inside settings
-  const focusable = settingsOverlay.querySelectorAll(
-    'input, select, textarea, button, [tabindex]:not([tabindex="-1"])'
-  );
-  const focusArray = Array.from(focusable).filter(el => {
-    // Only include visible elements
-    return el.offsetParent !== null && !el.disabled;
-  });
+  // Ctrl+S / Cmd+S to save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    e.stopPropagation();
+    saveSettings();
+    return;
+  }
 
-  if (focusArray.length === 0) return;
+  // Number keys 1-5 switch tabs (only when not focused on text/number input)
+  const activeTag = document.activeElement?.tagName?.toLowerCase();
+  const activeType = document.activeElement?.type;
+  const isTextInput = (activeTag === 'input' && (activeType === 'text' || activeType === 'password' || activeType === 'number'))
+                      || activeTag === 'textarea';
 
-  const currentIndex = focusArray.indexOf(document.activeElement);
+  if (!isTextInput && e.key >= '1' && e.key <= '5') {
+    e.preventDefault();
+    const idx = parseInt(e.key) - 1;
+    if (tabNames[idx]) switchSettingsTab(tabNames[idx]);
+    return;
+  }
+
+  // Arrow Left / Right to switch between tabs
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const activeTabBtn = settingsTabs.querySelector('.settings-tab.active');
+    if (activeTabBtn && (document.activeElement === activeTabBtn || document.activeElement?.closest('.settings-tabs'))) {
+      e.preventDefault();
+      const currentTabIdx = tabNames.indexOf(activeTabBtn.dataset.tab);
+      let nextIdx;
+      if (e.key === 'ArrowRight') {
+        nextIdx = currentTabIdx < tabNames.length - 1 ? currentTabIdx + 1 : 0;
+      } else {
+        nextIdx = currentTabIdx > 0 ? currentTabIdx - 1 : tabNames.length - 1;
+      }
+      switchSettingsTab(tabNames[nextIdx], false);
+      return;
+    }
+  }
+
+  // Get focusable elements in active panel + footer save button
+  const activePanel = settingsOverlay.querySelector('.settings-panel.active');
+  const panelFocusable = activePanel ? Array.from(activePanel.querySelectorAll(
+    'input, select, textarea'
+  )).filter(el => el.offsetParent !== null && !el.disabled) : [];
+  const allFocusable = [...panelFocusable, btnSaveSettings];
+
+  if (allFocusable.length === 0) return;
+
+  const currentIndex = allFocusable.indexOf(document.activeElement);
 
   if (e.key === 'Tab') {
     e.preventDefault();
     if (e.shiftKey) {
-      const next = currentIndex <= 0 ? focusArray.length - 1 : currentIndex - 1;
-      focusArray[next].focus();
+      const next = currentIndex <= 0 ? allFocusable.length - 1 : currentIndex - 1;
+      allFocusable[next].focus();
     } else {
-      const next = currentIndex >= focusArray.length - 1 ? 0 : currentIndex + 1;
-      focusArray[next].focus();
+      const next = currentIndex >= allFocusable.length - 1 ? 0 : currentIndex + 1;
+      allFocusable[next].focus();
     }
+    return;
   }
 
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    const next = currentIndex >= focusArray.length - 1 ? 0 : currentIndex + 1;
-    focusArray[next].focus();
+    const next = currentIndex >= allFocusable.length - 1 ? 0 : currentIndex + 1;
+    allFocusable[next].focus();
+    return;
   }
 
   if (e.key === 'ArrowUp') {
     e.preventDefault();
-    const next = currentIndex <= 0 ? focusArray.length - 1 : currentIndex - 1;
-    focusArray[next].focus();
+    const next = currentIndex <= 0 ? allFocusable.length - 1 : currentIndex - 1;
+    allFocusable[next].focus();
+    return;
   }
 
   // Enter toggles checkboxes
   if (e.key === 'Enter' && document.activeElement?.type === 'checkbox') {
     e.preventDefault();
     document.activeElement.checked = !document.activeElement.checked;
+    document.activeElement.dispatchEvent(new Event('change'));
+    return;
   }
 
   // Enter on save button triggers save
