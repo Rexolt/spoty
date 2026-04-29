@@ -306,6 +306,37 @@ function setupEventListeners() {
 
   // Settings keyboard navigation
   settingsOverlay.addEventListener('keydown', handleSettingsKeyboard);
+
+  // Event delegation for dynamically created elements (CSP-safe, no inline handlers)
+  resultsContainer.addEventListener('click', (e) => {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.getAttribute('data-action');
+    const id = actionEl.getAttribute('data-id');
+
+    switch (action) {
+      case 'copy-ai':
+        copyAiText(actionEl);
+        break;
+      case 'open-ai-history':
+        openAiHistory();
+        break;
+      case 'close-ai-history':
+        closeAiHistory();
+        break;
+      case 'delete-all-history':
+        deleteAllHistory();
+        break;
+      case 'view-history':
+        viewHistoryEntry(id);
+        break;
+      case 'delete-history':
+        e.stopPropagation();
+        deleteHistoryEntry(id);
+        break;
+    }
+  });
 }
 
 function switchMode(mode) {
@@ -581,7 +612,7 @@ function renderChatMessages(showLoading = false) {
           <div class="ai-content">
             <div class="ai-text">${htmlText}</div>
             ${!isError ? `
-            <button class="ai-copy-btn" onclick="copyAiText(this)" data-text="${escapeHtml(msg.content)}">
+            <button class="ai-copy-btn" data-action="copy-ai" data-text="${escapeHtml(msg.content)}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> ${dict.copy}
             </button>` : ''}
           </div>
@@ -621,7 +652,7 @@ function showAiHistoryHint() {
   footer.style.display = 'none';
   resultsContainer.innerHTML = `
     <div class="ai-history-hint fade-in" style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">
-      <button class="ai-history-btn" onclick="openAiHistory()" style="
+      <button class="ai-history-btn" data-action="open-ai-history" style="
         background: var(--selection-bg);
         border: 1px solid var(--border-color);
         color: var(--text-main);
@@ -642,7 +673,7 @@ function showAiHistoryHint() {
   updateWindowSize();
 }
 
-window.openAiHistory = async function() {
+async function openAiHistory() {
   const dict = i18n[appSettings?.language || 'hu'] || i18n['hu'];
   let history = [];
   try {
@@ -657,7 +688,7 @@ window.openAiHistory = async function() {
     resultsContainer.innerHTML = `
       <div class="ai-history-panel fade-in" style="padding: 16px; text-align: center;">
         <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px;">${dict.ai_history_empty}</div>
-        <button class="ai-history-btn" onclick="closeAiHistory()" style="
+        <button class="ai-history-btn" data-action="close-ai-history" style="
           background: var(--selection-bg);
           border: 1px solid var(--border-color);
           color: var(--text-main);
@@ -676,11 +707,11 @@ window.openAiHistory = async function() {
   const reversed = [...history].reverse();
   let html = '<div class="ai-history-panel fade-in" style="padding: 8px;">';
   html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px;">`;
-  html += `<button class="ai-history-btn" onclick="closeAiHistory()" style="
+  html += `<button class="ai-history-btn" data-action="close-ai-history" style="
     background: var(--selection-bg); border: 1px solid var(--border-color); color: var(--text-main);
     padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
   ">${dict.ai_history_back}</button>`;
-  html += `<button class="ai-history-btn" onclick="deleteAllHistory()" style="
+  html += `<button class="ai-history-btn" data-action="delete-all-history" style="
     background: rgba(255,60,60,0.1); border: 1px solid rgba(255,60,60,0.2); color: #ff4444;
     padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
   ">${dict.ai_history_delete_all}</button>`;
@@ -695,15 +726,15 @@ window.openAiHistory = async function() {
     const replyPreview = escapeHtml(entry.reply.substring(0, 80)) + (entry.reply.length > 80 ? '...' : '');
 
     html += `
-      <div class="result-item" style="cursor: pointer; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 14px;" onclick="viewHistoryEntry('${entry.id}')">
+      <div class="result-item history-entry" style="cursor: pointer; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 14px;" data-action="view-history" data-id="${entry.id}">
         <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
           <div class="result-title" style="font-size: 14px;">${promptPreview}</div>
           <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
             <span style="font-size: 10px; color: var(--text-muted);">${timeStr}</span>
-            <button onclick="event.stopPropagation(); deleteHistoryEntry('${entry.id}')" style="
+            <button class="history-delete-btn" data-action="delete-history" data-id="${entry.id}" style="
               background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;
-              font-size: 11px; opacity: 0.6; transition: opacity 0.2s;
-            " onmouseover="this.style.opacity=1;this.style.color='#ff4444'" onmouseout="this.style.opacity=0.6;this.style.color='var(--text-muted)'">
+              font-size: 11px; opacity: 0.6; transition: opacity 0.2s, color 0.2s;
+            ">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
@@ -717,7 +748,7 @@ window.openAiHistory = async function() {
   updateWindowSize();
 }
 
-window.viewHistoryEntry = async function(id) {
+async function viewHistoryEntry(id) {
   let history = [];
   try {
     history = await window.electron.invoke('get-chat-history');
@@ -731,7 +762,7 @@ window.viewHistoryEntry = async function(id) {
   renderAiReply(entry.reply, false, entry.prompt, true);
 }
 
-window.deleteHistoryEntry = async function(id) {
+async function deleteHistoryEntry(id) {
   try {
     await window.electron.invoke('delete-chat-history', id);
     openAiHistory();
@@ -740,7 +771,7 @@ window.deleteHistoryEntry = async function(id) {
   }
 }
 
-window.deleteAllHistory = async function() {
+async function deleteAllHistory() {
   try {
     await window.electron.invoke('delete-chat-history', '__all__');
     openAiHistory();
@@ -749,7 +780,7 @@ window.deleteAllHistory = async function() {
   }
 }
 
-window.closeAiHistory = function() {
+function closeAiHistory() {
   clearResults();
   if (isAiMode && appSettings?.ai?.saveHistory) {
     showAiHistoryHint();
@@ -766,7 +797,7 @@ function renderAiReply(text, isError = false, promptText = '', isFromHistory = f
   renderChatMessages(false);
 }
 
-window.copyAiText = function (btn) {
+function copyAiText(btn) {
   const text = btn.getAttribute('data-text');
   window.electron.send('clipboard-copy', text);
   const originalHtml = btn.innerHTML;
@@ -950,9 +981,12 @@ function handleKeyPress(e) {
   switch (e.key) {
     case 'Escape':
       if (searchInput.value) {
-        // First: clear the input text
+        // First: clear the input text and results
         searchInput.value = '';
         clearButton.style.display = 'none';
+        if (!isAiMode || chatDisplayMessages.length === 0) {
+          clearResults();
+        }
       } else if (isAiMode && chatDisplayMessages.length > 0) {
         // Second: clear the chat and show history/empty state
         chatDisplayMessages = [];

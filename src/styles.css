@@ -1333,6 +1333,12 @@ textarea:focus-visible {
   background: var(--text-muted);
 }
 
+/* -- HISTORY DELETE BUTTON -- */
+.history-delete-btn:hover {
+  opacity: 1 !important;
+  color: #ff4444 !important;
+}
+
 /* -- AI HISTORY BUTTON HOVER -- */
 .ai-history-btn:hover {
   filter: brightness(1.15);

@@ -64,6 +64,65 @@ let config = {
   autoLaunch: false
 };
 
+// Main process i18n for search result labels
+const mainI18n = {
+  hu: {
+    bookmark: 'Könyvjelző',
+    file: 'Fájl',
+    inFolder: 'mappában',
+    weatherTemp: 'Hőmérséklet',
+    weatherFeels: 'Érzet',
+    weatherHumidity: 'Páratartalom',
+    alias: 'Gyorsparancs',
+    aliasMulti: 'Több művelet futtatása',
+    aliasItems: 'elem',
+    run: 'Futtatás',
+    terminalCommand: 'Terminal parancs',
+    webSearch: 'Keresés a weben',
+    webSearchEngine: 'Web keresés (Google)',
+    sysCommand: 'Rendszer parancs',
+    calcResult: 'Számítás eredménye',
+    clipboardItem: 'Vágólap elem',
+    unitConverter: 'Mértékegység konverter',
+    tempConverter: 'Hőmérséklet konverter',
+    currencyConverter: 'Valutaváltó',
+    lockScreen: 'Képernyő zárolása',
+    sleep: 'Alvó mód',
+    shutdown: 'Leállítás',
+    restart: 'Újraindítás'
+  },
+  en: {
+    bookmark: 'Bookmark',
+    file: 'File',
+    inFolder: 'folder',
+    weatherTemp: 'Temperature',
+    weatherFeels: 'Feels like',
+    weatherHumidity: 'Humidity',
+    alias: 'Shortcut',
+    aliasMulti: 'Run multiple actions',
+    aliasItems: 'items',
+    run: 'Run',
+    terminalCommand: 'Terminal command',
+    webSearch: 'Search the web',
+    webSearchEngine: 'Web search (Google)',
+    sysCommand: 'System command',
+    calcResult: 'Calculation result',
+    clipboardItem: 'Clipboard item',
+    unitConverter: 'Unit converter',
+    tempConverter: 'Temperature converter',
+    currencyConverter: 'Currency converter',
+    lockScreen: 'Lock Screen',
+    sleep: 'Sleep',
+    shutdown: 'Shutdown',
+    restart: 'Restart'
+  }
+};
+
+function t(key) {
+  const lang = config.language || 'hu';
+  return (mainI18n[lang] || mainI18n['hu'])[key] || key;
+}
+
 // AI conversation context (multi-turn chat messages)
 let conversationMessages = [];
 
@@ -295,7 +354,8 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   };
 
@@ -552,9 +612,9 @@ async function searchBookmarks(query) {
     if (b.name.toLowerCase().includes(qLower) || b.url.toLowerCase().includes(qLower)) {
       try {
         const hostname = new URL(b.url).hostname;
-        results.push({ ...b, description: `Könyvjelző • ${hostname}` });
+        results.push({ ...b, description: `${t('bookmark')} • ${hostname}` });
       } catch (e) {
-        results.push({ ...b, description: `Könyvjelző` });
+        results.push({ ...b, description: t('bookmark') });
       }
     }
   }
@@ -613,7 +673,7 @@ async function searchFiles(query) {
             type: 'file',
             name: item,
             path: path.join(searchPath, item),
-            description: `Fájl • ${path.basename(searchPath)} mappában`
+            description: `${t('file')} • ${path.basename(searchPath)} ${t('inFolder')}`
           });
         }
       }
@@ -867,7 +927,7 @@ app.whenReady().then(async () => {
             condition: current.weatherDesc[0].value,
             feelsLike: `${current.FeelsLikeC}°C`,
             humidity: `${current.humidity}%`,
-            description: `Hőmérséklet: ${current.temp_C}°C | Érzet: ${current.FeelsLikeC}°C | Páratartalom: ${current.humidity}%`
+            description: `${t('weatherTemp')}: ${current.temp_C}°C | ${t('weatherFeels')}: ${current.FeelsLikeC}°C | ${t('weatherHumidity')}: ${current.humidity}%`
           });
           // If we have a weather hit, we can just return it exclusively for a clean look
           return results;
@@ -882,9 +942,9 @@ app.whenReady().then(async () => {
     if (config.aliases && config.aliases[qLower]) {
       results.push({
         type: 'alias',
-        name: `Gyorsparancs: ${qLower}`,
+        name: `${t('alias')}: ${qLower}`,
         commands: config.aliases[qLower],
-        description: `Több művelet futtatása (${config.aliases[qLower].length} elem)`
+        description: `${t('aliasMulti')} (${config.aliases[qLower].length} ${t('aliasItems')})`
       });
     }
 
@@ -893,9 +953,9 @@ app.whenReady().then(async () => {
       if (cmd) {
         results.push({
           type: 'command',
-          name: `Futtatás: ${cmd}`,
+          name: `${t('run')}: ${cmd}`,
           command: cmd,
-          description: 'Terminal parancs'
+          description: t('terminalCommand')
         });
       }
     }
@@ -905,9 +965,9 @@ app.whenReady().then(async () => {
       if (webQuery) {
         results.push({
           type: 'web',
-          name: `Keresés a weben: ${webQuery}`,
+          name: `${t('webSearch')}: ${webQuery}`,
           url: `https://www.google.com/search?q=${encodeURIComponent(webQuery)}`,
-          description: 'Web keresés (Google)'
+          description: t('webSearchEngine')
         });
       }
     }
@@ -915,35 +975,45 @@ app.whenReady().then(async () => {
     else if (config.search.enableSysCommands && ['lock', 'sleep', 'shutdown', 'restart', 'zár', 'alvás', 'leállítás', 'újraindítás', 'kikapcs'].includes(query.toLowerCase())) {
       const q = query.toLowerCase();
       let cmdName = '', cmdAction = '';
+      if (['lock', 'zár'].includes(q)) cmdName = t('lockScreen');
+      if (['sleep', 'alvás'].includes(q)) cmdName = t('sleep');
+      if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdName = t('shutdown');
+      if (['restart', 'újraindítás'].includes(q)) cmdName = t('restart');
+
       if (isWindows) {
-        if (['lock', 'zár'].includes(q)) { cmdName = 'Lock Screen'; cmdAction = 'rundll32.exe user32.dll,LockWorkStation'; }
-        if (['sleep', 'alvás'].includes(q)) { cmdName = 'Sleep'; cmdAction = 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0'; }
-        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) { cmdName = 'Shutdown'; cmdAction = 'shutdown /s /t 0'; }
-        if (['restart', 'újraindítás'].includes(q)) { cmdName = 'Restart'; cmdAction = 'shutdown /r /t 0'; }
+        if (['lock', 'zár'].includes(q)) cmdAction = 'rundll32.exe user32.dll,LockWorkStation';
+        if (['sleep', 'alvás'].includes(q)) cmdAction = 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0';
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'shutdown /s /t 0';
+        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'shutdown /r /t 0';
+      } else if (isMac) {
+        if (['lock', 'zár'].includes(q)) cmdAction = 'osascript -e \'tell application "System Events" to keystroke "q" using {command down, control down}\''; 
+        if (['sleep', 'alvás'].includes(q)) cmdAction = 'pmset sleepnow';
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'osascript -e \'tell app "System Events" to shut down\'';
+        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'osascript -e \'tell app "System Events" to restart\'';
       } else {
-        if (['lock', 'zár'].includes(q)) { cmdName = 'Képernyő zárolása'; cmdAction = 'loginctl lock-session'; }
-        if (['sleep', 'alvás'].includes(q)) { cmdName = 'Alvó mód'; cmdAction = 'systemctl suspend'; }
-        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) { cmdName = 'Leállítás'; cmdAction = 'systemctl poweroff'; }
-        if (['restart', 'újraindítás'].includes(q)) { cmdName = 'Újraindítás'; cmdAction = 'systemctl reboot'; }
+        if (['lock', 'zár'].includes(q)) cmdAction = 'loginctl lock-session';
+        if (['sleep', 'alvás'].includes(q)) cmdAction = 'systemctl suspend';
+        if (['shutdown', 'leállítás', 'kikapcs'].includes(q)) cmdAction = 'systemctl poweroff';
+        if (['restart', 'újraindítás'].includes(q)) cmdAction = 'systemctl reboot';
       }
 
       results.push({
         type: 'syscommand',
         name: cmdName,
         command: cmdAction,
-        description: `Rendszer parancs (${q})`
+        description: `${t('sysCommand')} (${q})`
       });
     }
     // Calculator
     else if (config.search.enableCalculator && /^[\d+\-*/().\s%]+$/.test(query)) {
       try {
         const result = safeEvaluateMath(query);
-        if (isFinite(result)) {
+        if (result !== null && isFinite(result)) {
           results.push({
             type: 'calc',
             name: `= ${result}`,
             value: result.toString(),
-            description: 'Számítás eredménye'
+            description: t('calcResult')
           });
         }
       } catch (e) { }
@@ -954,7 +1024,7 @@ app.whenReady().then(async () => {
         type: 'clipboard',
         name: item.text.substring(0, 50),
         value: item.text,
-        description: 'Vágólap elem'
+        description: t('clipboardItem')
       }));
     }
     // Converter (Unit / Currency)
@@ -978,7 +1048,7 @@ app.whenReady().then(async () => {
               type: 'calc',
               name: `${amount}°${from.toUpperCase()} = ${tempCalc.toFixed(2)}°${to.toUpperCase()}`,
               value: tempCalc.toString(),
-              description: 'Hőmérséklet konverter'
+              description: t('tempConverter')
             });
           } else {
             // Units (Length & Weight)
@@ -996,7 +1066,7 @@ app.whenReady().then(async () => {
                 type: 'calc',
                 name: `${amount} ${from} = ${converted.toFixed(4)} ${to}`,
                 value: converted.toString(),
-                description: 'Mértékegység konverter'
+                description: t('unitConverter')
               });
             } else if (rates && rates[from.toUpperCase()] && rates[to.toUpperCase()]) {
               // Currency
@@ -1004,9 +1074,9 @@ app.whenReady().then(async () => {
               const finalAmount = usdVal * rates[to.toUpperCase()];
               results.push({
                 type: 'calc',
-                name: `${amount} ${from.toUpperCase()} = ${finalAmount.toLocaleString('hu-HU', { maximumFractionDigits: 2 })} ${to.toUpperCase()}`,
+                name: `${amount} ${from.toUpperCase()} = ${finalAmount.toLocaleString(config.language === 'en' ? 'en-US' : 'hu-HU', { maximumFractionDigits: 2 })} ${to.toUpperCase()}`,
                 value: finalAmount.toString(),
-                description: 'Valutaváltó'
+                description: t('currencyConverter')
               });
             }
           }
@@ -1252,7 +1322,6 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 
-app.on('window-all-closed', (e) => {
-  // Keep the app running in the tray
-  if (!isMac) e.preventDefault();
+app.on('window-all-closed', () => {
+  // Keep the app running as a background launcher — don't quit on any platform
 });
