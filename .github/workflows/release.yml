@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build TypeScript sources
+        run: npm run build
+
       - name: Build Linux packages (${{ matrix.arch }})
         run: npx electron-builder --linux --${{ matrix.arch }}
         env:
@@ -39,10 +42,10 @@ jobs:
         with:
           name: linux-${{ matrix.arch }}
           path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-            dist/*.pacman
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.pacman
 
   build-macos:
     runs-on: macos-latest
@@ -58,6 +61,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build TypeScript sources
+        run: npm run build
+
       - name: Build macOS packages (universal)
         run: npx electron-builder --mac --universal
         env:
@@ -68,8 +74,8 @@ jobs:
         with:
           name: macos-universal
           path: |
-            dist/*.dmg
-            dist/*.zip
+            release/*.dmg
+            release/*.zip
 
   build-windows:
     strategy:
@@ -88,6 +94,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build TypeScript sources
+        run: npm run build
+
       - name: Build Windows packages (${{ matrix.arch }})
         run: npx electron-builder --win --${{ matrix.arch }}
         env:
@@ -97,7 +106,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-${{ matrix.arch }}
-          path: dist/*.exe
+          path: release/*.exe
 
   release:
     needs: [build-linux, build-macos, build-windows]
@@ -108,7 +117,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: release
           merge-multiple: true
 
       - name: Create GitHub Release
@@ -117,6 +126,6 @@ jobs:
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
           draft: false
-          files: dist/*
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
