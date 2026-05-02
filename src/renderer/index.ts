@@ -156,6 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   applyTheme(theme);
   populateSettingsUI(state.appSettings);
   setupEventListeners();
+  api.send('renderer-ready');
 
   // Suppress unused warnings during incremental development.
   void clearResults;

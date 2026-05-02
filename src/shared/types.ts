@@ -55,6 +55,13 @@ export interface AppConfig {
   language: Language;
   hotkey: string;
   autoLaunch: boolean;
+  /**
+   * Set to true once the user has acknowledged the Wayland
+   * hotkey-workaround dialog. Persisted so the notice is shown at most
+   * once per install rather than on every launch. Always present after
+   * `loadConfig()` — defaulted by the config loader for older files.
+   */
+  waylandNoticeDismissed: boolean;
 }
 
 /** Subset returned by the validator and sent over the IPC save-settings channel. */
@@ -78,6 +85,13 @@ export interface SaveSettingsResult {
   ok: boolean;
   settings?: SettingsPayload;
   error?: string;
+  /**
+   * Advisory, non-fatal message shown to the user after a successful
+   * save. Currently used on Wayland to inform the user that the hotkey
+   * may not be delivered by the compositor and that `spoty --toggle`
+   * can be bound to a DE-level custom shortcut instead.
+   */
+  warning?: string;
 }
 
 export type SearchResultType =
@@ -137,6 +151,7 @@ export interface ElectronApi {
 }
 
 export interface ElectronApiSend {
+  (channel: 'renderer-ready'): void;
   (channel: 'window-hide'): void;
   (channel: 'window-resize', height: number): void;
   (channel: 'app-launch', appPath: string): void;

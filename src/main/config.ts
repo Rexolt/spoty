@@ -45,6 +45,7 @@ const DEFAULT_CONFIG: AppConfig = {
   language: 'hu',
   hotkey: 'Alt+Space',
   autoLaunch: false,
+  waylandNoticeDismissed: false,
 };
 
 let current: AppConfig = structuredClone(DEFAULT_CONFIG);
@@ -87,6 +88,7 @@ export function loadConfig(): void {
     if (current.search.enableClipboard === undefined) current.search.enableClipboard = true;
     if (current.ai.saveHistory === undefined) current.ai.saveHistory = false;
     if (current.ai.useContext === undefined) current.ai.useContext = false;
+    if (current.waylandNoticeDismissed === undefined) current.waylandNoticeDismissed = false;
 
     // Backwards compat for old AI config (single apiKey/model).
     const legacyAi = loaded.ai as
