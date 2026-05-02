@@ -212,4 +212,11 @@ export function applySaveResult(result: SaveSettingsResult): void {
   translateUI(state.appSettings.language, state.isAiMode, dom.searchInput);
   applyTheme(state.appSettings.theme);
   hideSettings();
+
+  // Non-fatal advisory surfaced after a successful save (currently used
+  // by the main process to warn Wayland users about potential hotkey
+  // delivery issues and to hand them the `spoty --toggle` CLI fallback).
+  if (result.warning) {
+    alert(result.warning);
+  }
 }

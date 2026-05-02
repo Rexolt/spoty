@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const validSendChannels = [
+  'renderer-ready',
   'window-hide',
   'window-resize',
   'app-launch',
