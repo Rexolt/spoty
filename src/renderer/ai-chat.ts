@@ -105,20 +105,8 @@ export function showAiHistoryHint(): void {
   const dict = getDict(state.appSettings?.language);
   dom.footer.style.display = 'none';
   dom.resultsContainer.innerHTML = `
-    <div class="ai-history-hint fade-in" style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">
-      <button class="ai-history-btn" data-action="open-ai-history" style="
-        background: var(--selection-bg);
-        border: 1px solid var(--border-color);
-        color: var(--text-main);
-        padding: 8px 16px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 13px;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s ease;
-      ">
+    <div class="ai-history-hint fade-in">
+      <button class="ai-history-btn primary" data-action="open-ai-history">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         ${dict.ai_history_title}
       </button>
@@ -136,8 +124,8 @@ export function resetAiContext(): void {
 
   const dict = getDict(state.appSettings?.language);
   dom.resultsContainer.innerHTML = `
-    <div class="ai-history-hint fade-in" style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">
-      <div style="margin-bottom: 4px;">✨ ${dict.ai_new_chat}</div>
+    <div class="ai-reset-hint fade-in">
+      <div class="ai-reset-hint-card">✨ ${dict.ai_new_chat}</div>
     </div>
   `;
   updateWindowSize();
