@@ -21,17 +21,9 @@ export async function openAiHistory(): Promise<void> {
 
   if (!history || history.length === 0) {
     dom.resultsContainer.innerHTML = `
-      <div class="ai-history-panel fade-in" style="padding: 16px; text-align: center;">
-        <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px;">${dict.ai_history_empty}</div>
-        <button class="ai-history-btn" data-action="close-ai-history" style="
-          background: var(--selection-bg);
-          border: 1px solid var(--border-color);
-          color: var(--text-main);
-          padding: 6px 14px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 12px;
-        ">${dict.ai_history_back}</button>
+      <div class="ai-history-panel ai-history-empty fade-in">
+        <div class="ai-history-empty-text">${dict.ai_history_empty}</div>
+        <button class="ai-history-btn" data-action="close-ai-history">${dict.ai_history_back}</button>
       </div>
     `;
     updateWindowSize();
@@ -39,16 +31,10 @@ export async function openAiHistory(): Promise<void> {
   }
 
   const reversed = [...history].reverse();
-  let html = '<div class="ai-history-panel fade-in" style="padding: 8px;">';
-  html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px;">`;
-  html += `<button class="ai-history-btn" data-action="close-ai-history" style="
-    background: var(--selection-bg); border: 1px solid var(--border-color); color: var(--text-main);
-    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
-  ">${dict.ai_history_back}</button>`;
-  html += `<button class="ai-history-btn" data-action="delete-all-history" style="
-    background: rgba(255,60,60,0.1); border: 1px solid rgba(255,60,60,0.2); color: #ff4444;
-    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
-  ">${dict.ai_history_delete_all}</button>`;
+  let html = '<div class="ai-history-panel fade-in">';
+  html += `<div class="ai-history-toolbar">`;
+  html += `<button class="ai-history-btn" data-action="close-ai-history">${dict.ai_history_back}</button>`;
+  html += `<button class="ai-history-btn danger" data-action="delete-all-history">${dict.ai_history_delete_all}</button>`;
   html += `</div>`;
 
   const locale = state.appSettings?.language === 'en' ? 'en-US' : 'hu-HU';
@@ -67,20 +53,17 @@ export async function openAiHistory(): Promise<void> {
       escapeHtml(entry.reply.substring(0, 80)) + (entry.reply.length > 80 ? '...' : '');
 
     html += `
-      <div class="result-item history-entry" style="cursor: pointer; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 14px;" data-action="view-history" data-id="${entry.id}">
-        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-          <div class="result-title" style="font-size: 14px;">${promptPreview}</div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-            <span style="font-size: 10px; color: var(--text-muted);">${timeStr}</span>
-            <button class="history-delete-btn" data-action="delete-history" data-id="${entry.id}" style="
-              background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;
-              font-size: 11px; opacity: 0.6; transition: opacity 0.2s, color 0.2s;
-            ">
+      <div class="result-item history-entry" data-action="view-history" data-id="${entry.id}">
+        <div class="history-entry-header">
+          <div class="result-title history-entry-title">${promptPreview}</div>
+          <div class="history-entry-meta">
+            <span class="history-entry-time">${timeStr}</span>
+            <button class="history-delete-btn" data-action="delete-history" data-id="${entry.id}">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
         </div>
-        <div class="result-desc" style="font-size: 12px; white-space: normal; line-height: 1.4;">${replyPreview}</div>
+        <div class="result-desc history-entry-preview">${replyPreview}</div>
       </div>
     `;
   }
