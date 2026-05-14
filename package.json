@@ -58,9 +58,11 @@
       "icon": "build/icons",
       "category": "Utility",
       "desktop": {
-        "Name": "Spoty",
-        "Comment": "Modern Spotlight-like search & launcher",
-        "Keywords": "search;launcher;spotlight;lookup;"
+        "entry": {
+          "Name": "Spoty",
+          "Comment": "Modern Spotlight-like search & launcher",
+          "Keywords": "search;launcher;spotlight;lookup;"
+        }
       }
     },
     "win": {
