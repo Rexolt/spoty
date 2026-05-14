@@ -104,11 +104,19 @@ function bookmarkPaths(): string[] {
   ];
 }
 
-function extractAllUrls(node: BookmarkNode, out: BookmarkEntry[]): void {
-  if (node.type === 'url' && node.url && node.name) {
-    out.push({ type: 'web', name: node.name, url: node.url, description: '' });
-  } else if (node.type === 'folder' && node.children) {
-    for (const child of node.children) extractAllUrls(child, out);
+function extractAllUrls(root: BookmarkNode, out: BookmarkEntry[]): void {
+  const stack: BookmarkNode[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.type === 'url' && node.url && node.name) {
+      out.push({ type: 'web', name: node.name, url: node.url, description: '' });
+    } else if (node.type === 'folder' && node.children) {
+      // Push in reverse to maintain original order if desired, though
+      // order is usually secondary to stability here.
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        stack.push(node.children[i]);
+      }
+    }
   }
 }
 

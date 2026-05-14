@@ -40,6 +40,7 @@ export const dom = {
   setEnableSys: optional<HTMLInputElement>('set-enable-sys'),
   setEnableCalc: optional<HTMLInputElement>('set-enable-calc'),
   setEnableClip: optional<HTMLInputElement>('set-enable-clip'),
+  setLimitClip: optional<HTMLInputElement>('set-limit-clip'),
   setMaxResults: optional<HTMLInputElement>('set-max-results'),
 
   setAiProvider: required<HTMLSelectElement>('set-ai-provider'),

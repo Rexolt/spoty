@@ -205,11 +205,16 @@ export function clearResults(): void {
 }
 
 export async function performSearch(query: string): Promise<void> {
+  const searchId = ++state.lastSearchId;
   try {
     const results = await api.invoke('search', query);
+    // Paranoid guard: drop the result if a newer search has already been dispatched.
+    if (searchId !== state.lastSearchId) return;
+
     state.currentResults = results || [];
     renderResults(state.currentResults);
   } catch (error) {
+    if (searchId !== state.lastSearchId) return;
     console.error('Search error:', error);
     state.currentResults = [];
     renderResults([]);

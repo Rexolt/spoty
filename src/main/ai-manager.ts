@@ -6,12 +6,24 @@ const OPENAI_TIMEOUT_MS = 30_000;
 const GEMINI_TIMEOUT_MS = 30_000;
 const OLLAMA_TIMEOUT_MS = 60_000;
 const MAX_CONTEXT_MESSAGES = 20;
+const MAX_PROMPT_LENGTH = 10_000;
 const ALLOWED_OLLAMA_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 let conversationMessages: ChatMessage[] = [];
 let aiRequestCounter = 0;
 const pendingAiContextRequests = new Map<string, number>();
 let aiRequestQueue: Promise<unknown> = Promise.resolve();
+
+// Periodic cleanup for stale request mappings (e.g. if a request somehow hangs forever)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id] of pendingAiContextRequests.entries()) {
+    const timestamp = parseInt(id.split('-')[0], 36);
+    if (now - timestamp > 300_000) {
+      pendingAiContextRequests.delete(id);
+    }
+  }
+}, 600_000);
 
 export function resetContext(): void {
   conversationMessages = [];
@@ -21,22 +33,42 @@ export function getContextSnapshot(): ReadonlyArray<ChatMessage> {
   return conversationMessages;
 }
 
-function validateConversationContextInvariant(sourceTag: string): void {
+/**
+ * Validates and self-heals the conversation context. Ensures that roles
+ * strictly alternate (user -> assistant -> user...) and that the sequence
+ * always ends on an assistant reply before a new user request is added.
+ */
+function healConversationContext(sourceTag: string): void {
   const config = getConfig();
   if (!config.ai.useContext || conversationMessages.length === 0) return;
 
-  const anomalies: string[] = [];
+  const originalCount = conversationMessages.length;
+  const healed: ChatMessage[] = [];
+
   for (let i = 0; i < conversationMessages.length; i++) {
-    const expectedRole = i % 2 === 0 ? 'user' : 'assistant';
-    if (conversationMessages[i].role !== expectedRole) {
-      anomalies.push(`index ${i} expected ${expectedRole} got ${conversationMessages[i].role}`);
+    const msg = conversationMessages[i];
+    const expectedRole = healed.length % 2 === 0 ? 'user' : 'assistant';
+
+    if (msg.role === expectedRole) {
+      healed.push(msg);
+    } else {
+      console.warn(
+        `[AI context heal] @${sourceTag}: Dropping message at index ${i} (expected ${expectedRole}, got ${msg.role})`
+      );
     }
   }
-  if (conversationMessages.length % 2 !== 0) {
-    anomalies.push(`odd message count (${conversationMessages.length})`);
+
+  // If the sequence now ends on a 'user' message, it means we have a trailing
+  // user prompt without an assistant reply. Since `askAi` is about to add a
+  // *new* user prompt, we must drop this trailing one to maintain alternation.
+  if (healed.length > 0 && healed[healed.length - 1].role === 'user') {
+    console.warn(`[AI context heal] @${sourceTag}: Dropping trailing user message to maintain alternation.`);
+    healed.pop();
   }
-  if (anomalies.length > 0) {
-    console.warn(`[AI context invariant] anomaly @${sourceTag}: ${anomalies.join('; ')}`);
+
+  if (healed.length !== originalCount) {
+    conversationMessages = healed;
+    console.log(`[AI context heal] @${sourceTag}: Context repaired (${originalCount} -> ${healed.length} messages)`);
   }
 }
 
@@ -186,6 +218,10 @@ export function askAi(prompt: string): Promise<string> {
 
     const requestId = `${Date.now().toString(36)}-${(++aiRequestCounter).toString(36)}`;
 
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      throw new Error('A megadott szöveg túl hosszú.');
+    }
+
     if (config.ai.useContext) {
       conversationMessages.push({ role: 'user', content: prompt });
       pendingAiContextRequests.set(requestId, conversationMessages.length - 1);
@@ -199,7 +235,7 @@ export function askAi(prompt: string): Promise<string> {
           else pendingAiContextRequests.set(id, nextIdx);
         }
       }
-      validateConversationContextInvariant(`pre-request:${requestId}`);
+      healConversationContext(`pre-request:${requestId}`);
     }
 
     try {
@@ -221,7 +257,7 @@ export function askAi(prompt: string): Promise<string> {
       if (config.ai.useContext) {
         conversationMessages.push({ role: 'assistant', content: reply });
         pendingAiContextRequests.delete(requestId);
-        validateConversationContextInvariant(`success:${requestId}`);
+        healConversationContext(`success:${requestId}`);
       }
 
       addChatEntry(prompt, reply);
@@ -246,7 +282,7 @@ export function askAi(prompt: string): Promise<string> {
           console.warn(`[AI context cleanup] missing or invalid mapping for failed request ${requestId}`);
         }
         pendingAiContextRequests.delete(requestId);
-        validateConversationContextInvariant(`error:${requestId}`);
+        healConversationContext(`error:${requestId}`);
       }
       console.error('AI API error:', e);
       throw e;

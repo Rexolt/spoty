@@ -28,6 +28,7 @@ const DEFAULT_CONFIG: AppConfig = {
     enableSysCommands: true,
     enableCalculator: true,
     enableClipboard: true,
+    limitClipboardText: true,
   },
   ai: {
     provider: 'openai',
@@ -86,6 +87,7 @@ export function loadConfig(): void {
     if (current.search.enableSysCommands === undefined) current.search.enableSysCommands = true;
     if (current.search.enableCalculator === undefined) current.search.enableCalculator = true;
     if (current.search.enableClipboard === undefined) current.search.enableClipboard = true;
+    if (current.search.limitClipboardText === undefined) current.search.limitClipboardText = true;
     if (current.ai.saveHistory === undefined) current.ai.saveHistory = false;
     if (current.ai.useContext === undefined) current.ai.useContext = false;
     if (current.waylandNoticeDismissed === undefined) current.waylandNoticeDismissed = false;

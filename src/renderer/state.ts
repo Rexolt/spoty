@@ -9,4 +9,6 @@ export const state = {
   isAiMode: false,
   /** Persistent display chat in AI mode. Survives hide/show. */
   chatDisplayMessages: [] as ChatDisplayMessage[],
+  /** Tracks the most recent search request to ignore out-of-order responses. */
+  lastSearchId: 0,
 };
