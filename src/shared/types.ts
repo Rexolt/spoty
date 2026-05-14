@@ -32,6 +32,7 @@ export interface AppConfigSearch {
   enableSysCommands: boolean;
   enableCalculator: boolean;
   enableClipboard: boolean;
+  limitClipboardText: boolean;
 }
 
 export interface AppConfigAI {
@@ -76,6 +77,7 @@ export interface SettingsPayload {
   enableSysCommands: boolean;
   enableCalculator: boolean;
   enableClipboard: boolean;
+  limitClipboardText: boolean;
   maxResults: number;
   aliases: Record<string, AliasAction[]>;
   ai: AppConfigAI;

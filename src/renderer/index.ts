@@ -70,10 +70,10 @@ function setupEventListeners(): void {
   api.on('window-show', () => {
     document.body.classList.remove('window-closing');
     document.body.classList.add('window-opening');
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       dom.searchInput.focus();
       dom.searchInput.select();
-    }, 50);
+    });
 
     if (state.isAiMode) {
       if (state.chatDisplayMessages.length > 0) {

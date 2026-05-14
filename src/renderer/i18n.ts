@@ -27,6 +27,7 @@ export type DictKey =
   | 'settings_sys'
   | 'settings_calc'
   | 'settings_clip'
+  | 'settings_limit_clip'
   | 'settings_max'
   | 'settings_aliases'
   | 'settings_aliases_hint'
@@ -96,6 +97,7 @@ const dictionaries: Record<Language, Dictionary> = {
     settings_sys: 'Rendszer Parancsok (lock, sleep...)',
     settings_calc: 'Számológép',
     settings_clip: 'Vágólap (clip)',
+    settings_limit_clip: 'Vágólap szövegének korlátozása (50k karakter)',
     settings_max: 'Max találatok száma',
     settings_aliases: 'Egyedi Gyorsparancsok (Aliasok)',
     settings_aliases_hint: 'Használj JSON formátumot a parancsokhoz.',
@@ -162,6 +164,7 @@ const dictionaries: Record<Language, Dictionary> = {
     settings_sys: 'System Commands (lock, sleep...)',
     settings_calc: 'Calculator',
     settings_clip: 'Clipboard (clip)',
+    settings_limit_clip: 'Limit clipboard text length (50k chars)',
     settings_max: 'Max results',
     settings_aliases: 'Custom Shortcuts (Aliases)',
     settings_aliases_hint: 'Use JSON format to define commands.',

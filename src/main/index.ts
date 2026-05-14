@@ -117,13 +117,11 @@ function parseCliAction(argv: readonly string[]): CliAction {
 // itself a valid buffered `CliAction` value ("second instance launched
 // with no CLI flag") that we do need to replay.
 let mainWindowReady = false;
-let hasPendingCliAction = false;
-let pendingCliAction: CliAction = null;
+const pendingCliActions: CliAction[] = [];
 
 function applyCliAction(action: CliAction): void {
   if (!mainWindowReady) {
-    hasPendingCliAction = true;
-    pendingCliAction = action;
+    pendingCliActions.push(action);
     return;
   }
   switch (action) {
@@ -190,18 +188,11 @@ function startPrimaryInstance(): void {
     applyAutoLaunch(getConfig().autoLaunch === true);
 
     // Drain any CLI action that arrived via `second-instance` before the
-    // main BrowserWindow was constructed. If we drain *anything* (even a
-    // no-flag launch, which buffers as `null` and falls through to the
-    // `showWindow()` default), the second-instance user intent is more
-    // recent than the primary's own cold-start argv — so skip the
-    // cold-start branch below to avoid a double `showWindow()` /
-    // `activateWindow()` sequence on the same ready tick.
-    const drainedBufferedAction = hasPendingCliAction;
-    if (hasPendingCliAction) {
-      const queued = pendingCliAction;
-      hasPendingCliAction = false;
-      pendingCliAction = null;
-      applyCliAction(queued);
+    // main BrowserWindow was constructed.
+    const drainedAny = pendingCliActions.length > 0;
+    while (pendingCliActions.length > 0) {
+      const queued = pendingCliActions.shift();
+      if (queued !== undefined) applyCliAction(queued);
     }
 
     // Honour CLI control flags on cold start as well, so that invoking
@@ -210,7 +201,7 @@ function startPrimaryInstance(): void {
     //   --toggle / --show  → show the window (nothing to toggle yet)
     //   --hide             → stay hidden (already the default post-createWindow)
     //   no flag            → stay hidden; user is expected to invoke the hotkey
-    if (!drainedBufferedAction) {
+    if (!drainedAny) {
       const coldAction = parseCliAction(process.argv);
       if (coldAction === 'toggle' || coldAction === 'show') {
         showWindow();
@@ -249,35 +240,51 @@ function registerIpcHandlers(): void {
   ipcMain.on('window-hide', hideWindow);
 
   ipcMain.on('window-resize', (_, height: number) => {
-    resizeWindow(height);
+    try {
+      resizeWindow(height);
+    } catch (e) {
+      console.error('IPC error window-resize:', e);
+    }
   });
 
   ipcMain.on('app-launch', (_, appPath: string) => {
-    if (isLinux && appPath.endsWith('.desktop')) {
-      execFile('gio', ['launch', appPath], (err) => {
-        if (err) {
-          const appName = path.basename(appPath, '.desktop');
-          execFile('gtk-launch', [appName]);
-        }
-      });
-    } else if (isMac && appPath.endsWith('.app')) {
-      execFile('open', [appPath]);
-    } else {
-      shell.openPath(appPath);
+    try {
+      if (isLinux && appPath.endsWith('.desktop')) {
+        execFile('gio', ['launch', appPath], (err) => {
+          if (err) {
+            const appName = path.basename(appPath, '.desktop');
+            execFile('gtk-launch', [appName]);
+          }
+        });
+      } else if (isMac && appPath.endsWith('.app')) {
+        execFile('open', [appPath]);
+      } else {
+        shell.openPath(appPath);
+      }
+    } catch (e) {
+      console.error('IPC error app-launch:', e);
     }
     hideWindow();
   });
 
   ipcMain.on('item-show-folder', (_, itemPath: string) => {
-    shell.showItemInFolder(itemPath);
+    try {
+      shell.showItemInFolder(itemPath);
+    } catch (e) {
+      console.error('IPC error item-show-folder:', e);
+    }
     hideWindow();
   });
 
   ipcMain.on('url-open', (_, url: string) => {
-    if (isHttpUrl(url)) {
-      shell.openExternal(url);
-    } else {
-      console.warn('Blocked non-http URL:', url);
+    try {
+      if (isHttpUrl(url)) {
+        shell.openExternal(url);
+      } else {
+        console.warn('Blocked non-http URL:', url);
+      }
+    } catch (e) {
+      console.error('IPC error url-open:', e);
     }
     hideWindow();
   });
@@ -293,23 +300,27 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.on('alias-run', (_, actions: AliasAction[]) => {
-    if (!Array.isArray(actions)) {
-      console.warn('Blocked invalid alias payload:', actions);
-      hideWindow();
-      return;
-    }
-
-    actions.forEach((action) => {
-      if (action && action.type === 'url' && typeof action.url === 'string') {
-        if (isHttpUrl(action.url)) {
-          shell.openExternal(action.url);
-        } else {
-          console.warn('Blocked non-http alias URL:', action.url);
-        }
-      } else {
-        runSafeCommand(action);
+    try {
+      if (!Array.isArray(actions)) {
+        console.warn('Blocked invalid alias payload:', actions);
+        hideWindow();
+        return;
       }
-    });
+
+      actions.forEach((action) => {
+        if (action && action.type === 'url' && typeof action.url === 'string') {
+          if (isHttpUrl(action.url)) {
+            shell.openExternal(action.url);
+          } else {
+            console.warn('Blocked non-http alias URL:', action.url);
+          }
+        } else {
+          runSafeCommand(action);
+        }
+      });
+    } catch (e) {
+      console.error('IPC error alias-run:', e);
+    }
     hideWindow();
   });
 
@@ -362,22 +373,27 @@ function registerIpcHandlers(): void {
     config.autoLaunch = safe.autoLaunch === true;
     applyAutoLaunch(config.autoLaunch);
     config.aliases = safe.aliases;
-    config.search.enableFiles = safe.enableFiles;
-    config.search.enableBookmarks = safe.enableBookmarks;
-    config.search.enableWebSearch = safe.enableWebSearch;
-    config.search.enableSysCommands = safe.enableSysCommands;
-    config.search.enableCalculator = safe.enableCalculator;
-    config.search.enableClipboard = safe.enableClipboard;
-    config.search.maxResults = safe.maxResults;
+    Object.assign(config.search, {
+      enableFiles: safe.enableFiles,
+      enableBookmarks: safe.enableBookmarks,
+      enableWebSearch: safe.enableWebSearch,
+      enableSysCommands: safe.enableSysCommands,
+      enableCalculator: safe.enableCalculator,
+      enableClipboard: safe.enableClipboard,
+      limitClipboardText: safe.limitClipboardText,
+      maxResults: safe.maxResults,
+    });
 
-    config.ai.provider = safe.ai.provider;
-    config.ai.openaiApiKey = safe.ai.openaiApiKey;
-    config.ai.openaiModel = safe.ai.openaiModel;
-    config.ai.geminiApiKey = safe.ai.geminiApiKey;
-    config.ai.geminiModel = safe.ai.geminiModel;
-    config.ai.ollamaUrl = safe.ai.ollamaUrl;
-    config.ai.ollamaModel = safe.ai.ollamaModel;
-    config.ai.useContext = safe.ai.useContext === true;
+    Object.assign(config.ai, {
+      provider: safe.ai.provider,
+      openaiApiKey: safe.ai.openaiApiKey,
+      openaiModel: safe.ai.openaiModel,
+      geminiApiKey: safe.ai.geminiApiKey,
+      geminiModel: safe.ai.geminiModel,
+      ollamaUrl: safe.ai.ollamaUrl,
+      ollamaModel: safe.ai.ollamaModel,
+      useContext: safe.ai.useContext === true,
+    });
 
     const wasSaving = config.ai.saveHistory;
     config.ai.saveHistory = safe.ai.saveHistory === true;

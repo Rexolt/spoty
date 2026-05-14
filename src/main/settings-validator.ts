@@ -38,6 +38,7 @@ export function validateSettings(input: unknown): ValidateResult {
     enableSysCommands: config.search.enableSysCommands,
     enableCalculator: config.search.enableCalculator,
     enableClipboard: config.search.enableClipboard,
+    limitClipboardText: config.search.limitClipboardText,
     maxResults: config.search.maxResults,
     ai: { ...config.ai },
   };
@@ -54,6 +55,7 @@ export function validateSettings(input: unknown): ValidateResult {
   if (typeof raw.enableSysCommands === 'boolean') safe.enableSysCommands = raw.enableSysCommands;
   if (typeof raw.enableCalculator === 'boolean') safe.enableCalculator = raw.enableCalculator;
   if (typeof raw.enableClipboard === 'boolean') safe.enableClipboard = raw.enableClipboard;
+  if (typeof raw.limitClipboardText === 'boolean') safe.limitClipboardText = raw.limitClipboardText;
 
   if (typeof raw.language === 'string' && (ALLOWED_LANGUAGES as string[]).includes(raw.language)) {
     safe.language = raw.language as Language;

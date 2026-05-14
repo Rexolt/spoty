@@ -439,7 +439,7 @@ body.theme-light #clear-btn:hover {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px;
-  max-height: 520px;
+  max-height: calc(100vh - 120px);
   scroll-behavior: smooth;
 }
 
@@ -630,6 +630,7 @@ body.theme-light .result-icon {
   flex-direction: column;
   justify-content: center;
   gap: 3px;
+  user-select: text;
 }
 
 .result-title {
@@ -739,6 +740,7 @@ body.theme-light .weather-card {
   font-size: 14px;
   line-height: 1.45;
   word-wrap: break-word;
+  user-select: text;
   box-shadow: 0 2px 8px rgba(10, 132, 255, 0.25);
   animation: aiCardReveal 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -773,6 +775,7 @@ body.theme-light .ai-user-bubble {
   border-radius: var(--radius-item);
   padding: 16px;
   margin: 6px;
+  user-select: text;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 1px 1px rgba(255, 255, 255, 0.15) inset;

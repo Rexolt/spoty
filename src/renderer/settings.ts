@@ -57,6 +57,7 @@ export function populateSettingsUI(config: AppConfig | null): void {
   if (dom.setEnableSys) dom.setEnableSys.checked = config.search.enableSysCommands !== false;
   if (dom.setEnableCalc) dom.setEnableCalc.checked = config.search.enableCalculator !== false;
   if (dom.setEnableClip) dom.setEnableClip.checked = config.search.enableClipboard !== false;
+  if (dom.setLimitClip) dom.setLimitClip.checked = config.search.limitClipboardText !== false;
   if (dom.setMaxResults) dom.setMaxResults.value = String(config.search.maxResults || 8);
 
   if (dom.setAliases) {
@@ -150,6 +151,7 @@ export function saveSettings(): void {
     enableSysCommands: dom.setEnableSys?.checked ?? true,
     enableCalculator: dom.setEnableCalc?.checked ?? true,
     enableClipboard: dom.setEnableClip?.checked ?? true,
+    limitClipboardText: dom.setLimitClip?.checked ?? true,
     maxResults,
     ai: {
       provider: dom.setAiProvider.value as AIProvider,
@@ -163,6 +165,10 @@ export function saveSettings(): void {
       useContext: dom.setAiContext?.checked ?? false,
     },
   };
+
+  dom.btnSaveSettings.disabled = true;
+  dom.btnSaveSettings.style.opacity = '0.5';
+  dom.btnSaveSettings.style.cursor = 'wait';
 
   api.send('save-settings', newSettings);
 }
@@ -185,6 +191,10 @@ export function bindAiProviderToggle(): void {
 }
 
 export function applySaveResult(result: SaveSettingsResult): void {
+  dom.btnSaveSettings.disabled = false;
+  dom.btnSaveSettings.style.opacity = '';
+  dom.btnSaveSettings.style.cursor = '';
+
   if (!result || !result.ok || !result.settings) {
     alert(`Failed to save settings: ${result?.error || 'Unknown error'}`);
     return;
