@@ -3,11 +3,14 @@
  * Replaces unsafe `Function()`/`eval()`. Supports + - * / % and grouping.
  */
 export function safeEvaluateMath(expr: string): number | null {
-  const tokens = expr.match(/(\d+\.?\d*|[+\-*/%()])/g);
+  // Support scientific notation, decimals starting with '.', and the exponentiation operator '**' or '^'.
+  const tokens = expr.match(/(\d*\.?\d+(?:[eE][+-]?\d+)?|\*\*|[+\-*/%()^])/g);
   if (!tokens) return null;
 
   const cleaned = tokens.join('');
-  if (!/^[\d+\-*/%().]+$/.test(cleaned)) return null;
+  // Validate characters — '^' is mapped to '**' during execution if we use eval-like logic,
+  // but here we manually parse.
+  if (!/^[\d+\-*/%().^eE+-]+$/.test(cleaned)) return null;
 
   let pos = 0;
 
@@ -22,13 +25,13 @@ export function safeEvaluateMath(expr: string): number | null {
   }
 
   function parseTerm(): number {
-    let result = parseFactor();
+    let result = parsePower();
     while (
       pos < tokens!.length &&
       (tokens![pos] === '*' || tokens![pos] === '/' || tokens![pos] === '%')
     ) {
       const op = tokens![pos++];
-      const right = parseFactor();
+      const right = parsePower();
       if (op === '*') result *= right;
       else if (op === '/') {
         if (right === 0) throw new Error('Division by zero');
@@ -40,7 +43,19 @@ export function safeEvaluateMath(expr: string): number | null {
     return result;
   }
 
+  function parsePower(): number {
+    let result = parseFactor();
+    while (pos < tokens!.length && (tokens![pos] === '**' || tokens![pos] === '^')) {
+      pos++;
+      const right = parsePower(); // Right-associative
+      result = Math.pow(result, right);
+    }
+    return result;
+  }
+
   function parseFactor(): number {
+    if (pos >= tokens!.length) throw new Error('Unexpected end of expression');
+
     if (tokens![pos] === '-') {
       pos++;
       return -parseFactor();
@@ -64,9 +79,10 @@ export function safeEvaluateMath(expr: string): number | null {
 
   try {
     const result = parseExpression();
-    if (pos !== tokens.length) return null;
+    if (pos !== tokens.length || !Number.isFinite(result)) return null;
     return result;
   } catch {
     return null;
   }
 }
+

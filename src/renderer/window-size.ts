@@ -11,21 +11,20 @@ export function updateWindowSize(): void {
   if (dom.settingsOverlay.style.display !== 'none') return;
 
   setTimeout(() => {
-    let resultsHeight = 0;
-    Array.from(dom.resultsContainer.children).forEach((child) => {
-      const node = child as HTMLElement;
-      const style = window.getComputedStyle(node);
-      const mt = parseFloat(style.marginTop) || 0;
-      const mb = parseFloat(style.marginBottom) || 0;
-      resultsHeight += node.offsetHeight + mt + mb;
-    });
+    // Use the actual scrollHeight of the results container for a more robust measurement
+    // than summing up children offsetHeights.
+    const resultsScrollHeight = dom.resultsContainer.scrollHeight;
+    
     const footerHeight = dom.footer.style.display !== 'none' ? dom.footer.offsetHeight : 0;
-    const padding = resultsHeight > 0 ? 16 : 0;
-    const actualResultsHeight = Math.min(resultsHeight, MAX_RESULTS_HEIGHT);
+    
+    // If we have results, add a small buffer for the bottom padding/margin
+    const padding = resultsScrollHeight > 0 ? 12 : 0;
+    const actualResultsHeight = Math.min(resultsScrollHeight, MAX_RESULTS_HEIGHT);
+    
     const totalHeight =
       HEADER_HEIGHT + SEARCH_HEIGHT + actualResultsHeight + footerHeight + padding;
 
-    api.send('window-resize', totalHeight);
+    api.send('window-resize', Math.ceil(totalHeight));
   }, RESIZE_DEBOUNCE_MS);
 }
 

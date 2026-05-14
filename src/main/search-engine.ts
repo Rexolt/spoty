@@ -17,9 +17,21 @@ interface ClipboardEntry {
 /** In-memory clipboard history populated by `clipboard-monitor.ts`. */
 const clipboardHistory: ClipboardEntry[] = [];
 
+const MAX_CLIPBOARD_TEXT_LENGTH = 50_000;
+
 export function recordClipboardEntry(text: string): void {
+  const config = getConfig();
   if (!text || clipboardHistory.some((item) => item.text === text)) return;
-  clipboardHistory.unshift({ text, time: new Date().toISOString() });
+
+  let entryText = text;
+  if (
+    config.search.limitClipboardText &&
+    entryText.length > MAX_CLIPBOARD_TEXT_LENGTH
+  ) {
+    entryText = entryText.substring(0, MAX_CLIPBOARD_TEXT_LENGTH) + '...';
+  }
+
+  clipboardHistory.unshift({ text: entryText, time: new Date().toISOString() });
   if (clipboardHistory.length > 20) clipboardHistory.pop();
 }
 
@@ -159,10 +171,12 @@ export async function search(query: string): Promise<SearchResult[]> {
     });
   }
   // Calculator
-  else if (config.search.enableCalculator && /^[\d+\-*/().\s%]+$/.test(query)) {
+  else if (config.search.enableCalculator && /^[\d+\-*/().\s%^eE]+$/.test(query)) {
     try {
-      const result = safeEvaluateMath(query);
-      if (result !== null && isFinite(result)) {
+      const rawResult = safeEvaluateMath(query);
+      if (rawResult !== null && isFinite(rawResult)) {
+        // Fix precision issues (e.g. 0.1 + 0.2) by rounding to a high but reasonable decimal count.
+        const result = Number(rawResult.toFixed(10));
         results.push({
           type: 'calc',
           name: `= ${result}`,
