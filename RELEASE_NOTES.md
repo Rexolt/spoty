@@ -1,3 +1,18 @@
+## 🧮 v3.2.4 — Precision & Stability
+
+### 🔢 Calculator Enhancements
+
+- **Floating Point Precision** — Fixed the `0.1 + 0.2 = 0.30000000000000004` issue by rounding results to 10 decimal places.
+- **Exponentiation Support** — Added support for `**` and `^` operators.
+- **Rich Number Formats** — The tokenizer now supports scientific notation (e.g., `1e10`) and numbers starting with a decimal point (e.g., `.5`).
+
+### 🖼️ UI Stability & Robustness
+
+- **Smooth Window Resizing** — Fixed a layout jump where 16px of padding was only added when results appeared. Resizing is now consistent across all search states.
+- **Improved Height Calculation** — Replaced manual child-loop summation with `scrollHeight` for more robust and jitter-free window scaling.
+
+---
+
 ## 🔒 v3.2.3 — Security Hardening
 
 ### 🛡️ Hardened Command Execution
