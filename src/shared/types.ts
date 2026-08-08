@@ -1,11 +1,35 @@
 /**
  * Shared types used by both main and renderer processes.
- * Type-only file: importing this in either context produces no runtime code.
+ *
+ * Almost everything here is type-only (erased at compile time). The one
+ * exception is `KEEP_SECRET_SENTINEL`, which both sides must agree on
+ * literally, so it lives here as a real runtime constant.
  */
 
 export type AIProvider = 'openai' | 'gemini' | 'ollama';
 export type Theme = 'dark' | 'light' | 'ocean' | 'forest' | 'midnight';
 export type Language = 'hu' | 'en';
+
+/**
+ * Web search engines the user can pick from. The default is DuckDuckGo:
+ * it does not profile users and does not require a query to be tied to an
+ * account, so it is the privacy-preserving choice for a launcher that
+ * forwards typed text to a third party.
+ */
+export type WebSearchEngine =
+  | 'duckduckgo'
+  | 'startpage'
+  | 'brave'
+  | 'ecosia'
+  | 'google';
+
+/**
+ * Sentinel sent by the renderer on the `save-settings` channel in place of
+ * an API key that the user did not touch. The renderer never receives the
+ * real key (see `PublicConfig`), so it cannot echo it back — this marker
+ * tells the main process to keep whatever is already stored.
+ */
+export const KEEP_SECRET_SENTINEL = '__SPOTY_KEEP__';
 
 export type SafeCommandId = 'lock_screen' | 'sleep' | 'shutdown' | 'restart';
 
@@ -29,10 +53,37 @@ export interface AppConfigSearch {
   enableFiles: boolean;
   enableBookmarks: boolean;
   enableWebSearch: boolean;
+  webSearchEngine: WebSearchEngine;
   enableSysCommands: boolean;
   enableCalculator: boolean;
   enableClipboard: boolean;
   limitClipboardText: boolean;
+}
+
+/**
+ * Everything that causes Spoty to either leave the machine or retain user
+ * data lives here, so a user can audit the whole data-flow surface from a
+ * single settings panel.
+ */
+export interface AppConfigPrivacy {
+  /**
+   * Hard kill-switch for outbound network traffic. When enabled, the only
+   * connections Spoty will make are to a loopback Ollama instance; weather,
+   * exchange rates, OpenAI and Gemini are all refused in the main process
+   * (not merely hidden in the UI).
+   */
+  offlineMode: boolean;
+  /** Allow the `weather <city>` provider to query wttr.in. */
+  enableWeather: boolean;
+  /** Allow the currency converter to fetch rates from open.er-api.com. */
+  enableCurrency: boolean;
+  /** Drop clipboard entries older than this (minutes, 1–1440). */
+  clipboardRetentionMinutes: number;
+  /**
+   * Skip clipboard entries that the source application marked as
+   * sensitive (password managers set a per-platform "concealed" flag).
+   */
+  clipboardIgnoreSensitive: boolean;
 }
 
 export interface AppConfigAI {
@@ -51,6 +102,7 @@ export interface AppConfig {
   window: AppConfigWindow;
   search: AppConfigSearch;
   ai: AppConfigAI;
+  privacy: AppConfigPrivacy;
   aliases: Record<string, AliasAction[]>;
   theme: Theme;
   language: Language;
@@ -65,6 +117,23 @@ export interface AppConfig {
   waylandNoticeDismissed: boolean;
 }
 
+/**
+ * AI settings as they cross the IPC boundary. API keys are never handed to
+ * the renderer: `openaiApiKey` / `geminiApiKey` are always empty strings in
+ * this direction and the booleans only report *whether* a key is stored.
+ */
+export interface PublicConfigAI extends AppConfigAI {
+  hasOpenaiKey: boolean;
+  hasGeminiKey: boolean;
+}
+
+/** The redacted view of the config that the renderer is allowed to see. */
+export interface PublicConfig extends Omit<AppConfig, 'ai'> {
+  ai: PublicConfigAI;
+  /** True when API keys are encrypted at rest via the OS keychain. */
+  secretsEncrypted: boolean;
+}
+
 /** Subset returned by the validator and sent over the IPC save-settings channel. */
 export interface SettingsPayload {
   language: Language;
@@ -74,6 +143,7 @@ export interface SettingsPayload {
   enableFiles: boolean;
   enableBookmarks: boolean;
   enableWebSearch: boolean;
+  webSearchEngine: WebSearchEngine;
   enableSysCommands: boolean;
   enableCalculator: boolean;
   enableClipboard: boolean;
@@ -81,11 +151,20 @@ export interface SettingsPayload {
   maxResults: number;
   aliases: Record<string, AliasAction[]>;
   ai: AppConfigAI;
+  privacy: AppConfigPrivacy;
+}
+
+/**
+ * `SettingsPayload` with the secrets stripped — what the main process
+ * echoes back to the renderer after a successful save.
+ */
+export interface PublicSettingsPayload extends Omit<SettingsPayload, 'ai'> {
+  ai: PublicConfigAI;
 }
 
 export interface SaveSettingsResult {
   ok: boolean;
-  settings?: SettingsPayload;
+  settings?: PublicSettingsPayload;
   error?: string;
   /**
    * Advisory, non-fatal message shown to the user after a successful
@@ -115,7 +194,14 @@ export interface SearchResult {
   url?: string;
   value?: string;
   action?: SafeCommandAction;
-  commands?: AliasAction[];
+  /**
+   * Key of the alias to run. Only the key travels to the renderer and back;
+   * the main process resolves it against its own config so a compromised
+   * renderer cannot inject arbitrary URLs or commands into `alias-run`.
+   */
+  aliasKey?: string;
+  /** How many actions the alias expands to (display only). */
+  aliasCount?: number;
   icon?: string;
   iconPath?: string;
   // Weather-specific
@@ -161,9 +247,10 @@ export interface ElectronApiSend {
   (channel: 'url-open', url: string): void;
   (channel: 'clipboard-copy', text: string): void;
   (channel: 'command-run', action: SafeCommandAction): void;
-  (channel: 'alias-run', actions: AliasAction[]): void;
+  (channel: 'alias-run', aliasKey: string): void;
   (channel: 'save-settings', settings: unknown): void;
   (channel: 'reset-ai-context'): void;
+  (channel: 'clipboard-history-clear'): void;
 }
 
 export type RendererListener<T> = (payload: T) => void;
@@ -181,7 +268,7 @@ export interface ElectronApiInvoke {
   (channel: 'search', query: string): Promise<SearchResult[]>;
   (channel: 'ask-ai', prompt: string): Promise<string>;
   (channel: 'get-icon', iconName: string): Promise<string | null>;
-  (channel: 'get-settings'): Promise<AppConfig>;
+  (channel: 'get-settings'): Promise<PublicConfig>;
   (channel: 'get-chat-history'): Promise<ChatEntry[]>;
   (channel: 'delete-chat-history', id: string): Promise<boolean>;
 }

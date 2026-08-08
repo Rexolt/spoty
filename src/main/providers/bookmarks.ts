@@ -3,11 +3,21 @@ import * as os from 'os';
 import * as path from 'path';
 import { isMac, isWindows } from '../platform';
 import { getConfig } from '../config';
+import { isSafeExternalUrl } from '../sanitize';
 import { t } from '../i18n';
 import type { SearchResult } from '../../shared/types';
 
 const CACHE_TTL_MS = 300_000;
 const MIN_QUERY_LENGTH = 2;
+
+/**
+ * A `Bookmarks` file is a browser artifact we do not control, so treat it as
+ * untrusted input: cap the size we will read and the number of entries we keep
+ * in memory.
+ */
+const MAX_BOOKMARK_FILE_BYTES = 32 * 1024 * 1024;
+const MAX_BOOKMARK_ENTRIES = 20_000;
+const MAX_BOOKMARK_NAME_LENGTH = 512;
 
 interface BookmarkEntry {
   type: 'web';
@@ -107,9 +117,20 @@ function bookmarkPaths(): string[] {
 function extractAllUrls(root: BookmarkNode, out: BookmarkEntry[]): void {
   const stack: BookmarkNode[] = [root];
   while (stack.length > 0) {
+    if (out.length >= MAX_BOOKMARK_ENTRIES) return;
     const node = stack.pop()!;
     if (node.type === 'url' && node.url && node.name) {
-      out.push({ type: 'web', name: node.name, url: node.url, description: '' });
+      // Bookmarklets (`javascript:`) and other exotic schemes are dropped
+      // here rather than being surfaced and rejected later: a launcher should
+      // never offer to hand one to the OS.
+      if (isSafeExternalUrl(node.url)) {
+        out.push({
+          type: 'web',
+          name: node.name.slice(0, MAX_BOOKMARK_NAME_LENGTH),
+          url: node.url,
+          description: '',
+        });
+      }
     } else if (node.type === 'folder' && node.children) {
       // Push in reverse to maintain original order if desired, though
       // order is usually secondary to stability here.
@@ -131,7 +152,12 @@ export async function getBookmarks(): Promise<BookmarkEntry[]> {
   await Promise.all(
     bookmarkPaths().map(async (bp) => {
       try {
-        if (fs.existsSync(bp)) {
+        const stat = await fs.promises.stat(bp).catch(() => null);
+        if (stat && stat.isFile()) {
+          if (stat.size > MAX_BOOKMARK_FILE_BYTES) {
+            console.warn(`Skipping oversized bookmarks file: ${path.basename(path.dirname(bp))}`);
+            return;
+          }
           const data = await fs.promises.readFile(bp, 'utf-8');
           const json = JSON.parse(data) as BookmarksJson;
           if (json.roots) {

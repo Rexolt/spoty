@@ -1,24 +1,75 @@
 import { dom } from './dom';
 import { api } from './electron-api';
 import { state } from './state';
-import { translateUI } from './i18n';
+import { getDict, translateUI } from './i18n';
 import { applyTheme } from './theme';
 import {
   updateWindowSize,
   updateWindowSizeForSettings,
 } from './window-size';
-import type {
-  AIProvider,
-  AliasAction,
-  AppConfig,
-  Language,
-  SaveSettingsResult,
-  SettingsPayload,
-  Theme,
+import {
+  KEEP_SECRET_SENTINEL,
+  type AIProvider,
+  type AliasAction,
+  type Language,
+  type PublicConfig,
+  type SaveSettingsResult,
+  type SettingsPayload,
+  type Theme,
+  type WebSearchEngine,
 } from '../shared/types';
 
-const TAB_NAMES = ['general', 'search', 'modules', 'ai', 'aliases'] as const;
+const TAB_NAMES = ['general', 'search', 'modules', 'ai', 'privacy', 'aliases'] as const;
 type TabName = (typeof TAB_NAMES)[number];
+
+/**
+ * Per-provider intent for the API-key fields.
+ *
+ * The renderer never receives the stored key, so an empty input is ambiguous:
+ * it can mean "leave the saved key alone" or "delete it". The user resolves
+ * that with the explicit delete button, and this flag carries the answer.
+ */
+const keyCleared: Record<'openai' | 'gemini', boolean> = {
+  openai: false,
+  gemini: false,
+};
+
+/**
+ * Resolves what to send for one key field: a freshly typed value, the
+ * "keep what you have" sentinel, or an empty string meaning delete.
+ */
+function resolveKeyField(
+  input: HTMLInputElement,
+  provider: 'openai' | 'gemini',
+  hasStoredKey: boolean
+): string {
+  const typed = input.value.trim();
+  if (typed) return typed;
+  if (keyCleared[provider]) return '';
+  return hasStoredKey ? KEEP_SECRET_SENTINEL : '';
+}
+
+function updateKeyStateLabels(): void {
+  const dict = getDict(state.appSettings?.language);
+  const ai = state.appSettings?.ai;
+
+  const describe = (provider: 'openai' | 'gemini', hasKey: boolean): string => {
+    if (keyCleared[provider]) return dict.settings_key_cleared;
+    return hasKey ? dict.settings_key_saved : dict.settings_key_none;
+  };
+
+  if (dom.openaiKeyState) {
+    dom.openaiKeyState.textContent = describe('openai', ai?.hasOpenaiKey === true);
+  }
+  if (dom.geminiKeyState) {
+    dom.geminiKeyState.textContent = describe('gemini', ai?.hasGeminiKey === true);
+  }
+  if (dom.secretsState) {
+    dom.secretsState.textContent = state.appSettings?.secretsEncrypted
+      ? dict.settings_secrets_encrypted
+      : dict.settings_secrets_plain;
+  }
+}
 
 function normalizeAliasActions(input: unknown): Record<string, AliasAction[]> {
   const out: Record<string, AliasAction[]> = {};
@@ -43,7 +94,7 @@ function normalizeAliasActions(input: unknown): Record<string, AliasAction[]> {
   return out;
 }
 
-export function populateSettingsUI(config: AppConfig | null): void {
+export function populateSettingsUI(config: PublicConfig | null): void {
   if (!config) return;
 
   if (dom.setLanguage) dom.setLanguage.value = config.language || 'hu';
@@ -59,6 +110,21 @@ export function populateSettingsUI(config: AppConfig | null): void {
   if (dom.setEnableClip) dom.setEnableClip.checked = config.search.enableClipboard !== false;
   if (dom.setLimitClip) dom.setLimitClip.checked = config.search.limitClipboardText !== false;
   if (dom.setMaxResults) dom.setMaxResults.value = String(config.search.maxResults || 8);
+  if (dom.setSearchEngine) {
+    dom.setSearchEngine.value = config.search.webSearchEngine || 'duckduckgo';
+  }
+
+  if (dom.setOfflineMode) dom.setOfflineMode.checked = config.privacy.offlineMode === true;
+  if (dom.setEnableWeather) dom.setEnableWeather.checked = config.privacy.enableWeather !== false;
+  if (dom.setEnableCurrency) {
+    dom.setEnableCurrency.checked = config.privacy.enableCurrency !== false;
+  }
+  if (dom.setClipSensitive) {
+    dom.setClipSensitive.checked = config.privacy.clipboardIgnoreSensitive !== false;
+  }
+  if (dom.setClipRetention) {
+    dom.setClipRetention.value = String(config.privacy.clipboardRetentionMinutes || 60);
+  }
 
   if (dom.setAliases) {
     dom.setAliases.value = JSON.stringify(
@@ -69,9 +135,15 @@ export function populateSettingsUI(config: AppConfig | null): void {
   }
 
   dom.setAiProvider.value = config.ai.provider || 'openai';
-  dom.setOpenaiApiKey.value = config.ai.openaiApiKey || '';
+  // Key inputs stay empty on purpose: the stored key is never sent here, so
+  // there is nothing to prefill. The label next to the field says whether one
+  // exists.
+  dom.setOpenaiApiKey.value = '';
+  dom.setGeminiApiKey.value = '';
+  keyCleared.openai = false;
+  keyCleared.gemini = false;
+  updateKeyStateLabels();
   dom.setOpenaiModel.value = config.ai.openaiModel || 'gpt-4o-mini';
-  dom.setGeminiApiKey.value = config.ai.geminiApiKey || '';
   dom.setGeminiModel.value = config.ai.geminiModel || 'gemini-2.5-flash';
   if (dom.setOllamaUrl) dom.setOllamaUrl.value = config.ai.ollamaUrl || 'http://localhost:11434';
   if (dom.setOllamaModel) dom.setOllamaModel.value = config.ai.ollamaModel || 'llama3.2';
@@ -139,6 +211,14 @@ export function saveSettings(): void {
     return;
   }
 
+  const retentionInput = dom.setClipRetention
+    ? parseInt(dom.setClipRetention.value, 10)
+    : 60;
+  const clipboardRetentionMinutes =
+    Number.isInteger(retentionInput) && retentionInput >= 1 && retentionInput <= 1440
+      ? retentionInput
+      : state.appSettings?.privacy.clipboardRetentionMinutes ?? 60;
+
   const newSettings: SettingsPayload = {
     language: ((dom.setLanguage?.value || 'hu') as Language),
     theme: ((dom.setTheme?.value || 'dark') as Theme),
@@ -148,6 +228,7 @@ export function saveSettings(): void {
     enableFiles: dom.setEnableFiles.checked,
     enableBookmarks: dom.setEnableBookmarks?.checked ?? true,
     enableWebSearch: dom.setEnableWeb?.checked ?? true,
+    webSearchEngine: (dom.setSearchEngine?.value || 'duckduckgo') as WebSearchEngine,
     enableSysCommands: dom.setEnableSys?.checked ?? true,
     enableCalculator: dom.setEnableCalc?.checked ?? true,
     enableClipboard: dom.setEnableClip?.checked ?? true,
@@ -155,14 +236,29 @@ export function saveSettings(): void {
     maxResults,
     ai: {
       provider: dom.setAiProvider.value as AIProvider,
-      openaiApiKey: dom.setOpenaiApiKey.value,
+      openaiApiKey: resolveKeyField(
+        dom.setOpenaiApiKey,
+        'openai',
+        state.appSettings?.ai.hasOpenaiKey === true
+      ),
       openaiModel: dom.setOpenaiModel.value,
-      geminiApiKey: dom.setGeminiApiKey.value,
+      geminiApiKey: resolveKeyField(
+        dom.setGeminiApiKey,
+        'gemini',
+        state.appSettings?.ai.hasGeminiKey === true
+      ),
       geminiModel: dom.setGeminiModel.value,
       ollamaUrl: dom.setOllamaUrl?.value || 'http://localhost:11434',
       ollamaModel: dom.setOllamaModel?.value || 'llama3.2',
       saveHistory: dom.setAiHistory?.checked ?? false,
       useContext: dom.setAiContext?.checked ?? false,
+    },
+    privacy: {
+      offlineMode: dom.setOfflineMode?.checked ?? false,
+      enableWeather: dom.setEnableWeather?.checked ?? true,
+      enableCurrency: dom.setEnableCurrency?.checked ?? true,
+      clipboardRetentionMinutes,
+      clipboardIgnoreSensitive: dom.setClipSensitive?.checked ?? true,
     },
   };
 
@@ -171,6 +267,47 @@ export function saveSettings(): void {
   dom.btnSaveSettings.style.cursor = 'wait';
 
   api.send('save-settings', newSettings);
+}
+
+/**
+ * Wires the privacy-panel actions: the two "delete stored key" buttons and the
+ * immediate clipboard-history purge.
+ */
+export function bindPrivacyControls(): void {
+  const bindClear = (
+    button: HTMLButtonElement | null,
+    input: HTMLInputElement,
+    provider: 'openai' | 'gemini'
+  ): void => {
+    if (!button) return;
+    button.addEventListener('click', () => {
+      keyCleared[provider] = true;
+      input.value = '';
+      updateKeyStateLabels();
+    });
+    // Typing again cancels the pending deletion.
+    input.addEventListener('input', () => {
+      if (keyCleared[provider] && input.value) {
+        keyCleared[provider] = false;
+        updateKeyStateLabels();
+      }
+    });
+  };
+
+  bindClear(dom.btnClearOpenaiKey, dom.setOpenaiApiKey, 'openai');
+  bindClear(dom.btnClearGeminiKey, dom.setGeminiApiKey, 'gemini');
+
+  dom.btnClearClipboard?.addEventListener('click', () => {
+    api.send('clipboard-history-clear');
+    const dict = getDict(state.appSettings?.language);
+    if (dom.secretsState) {
+      const previous = dom.secretsState.textContent;
+      dom.secretsState.textContent = dict.settings_clip_cleared;
+      setTimeout(() => {
+        if (dom.secretsState) dom.secretsState.textContent = previous;
+      }, 2000);
+    }
+  });
 }
 
 export function bindAiProviderToggle(): void {
@@ -210,11 +347,21 @@ export function applySaveResult(result: SaveSettingsResult): void {
   state.appSettings.search.enableFiles = ns.enableFiles;
   state.appSettings.search.enableBookmarks = ns.enableBookmarks;
   state.appSettings.search.enableWebSearch = ns.enableWebSearch;
+  state.appSettings.search.webSearchEngine = ns.webSearchEngine;
   state.appSettings.search.enableSysCommands = ns.enableSysCommands;
   state.appSettings.search.enableCalculator = ns.enableCalculator;
   state.appSettings.search.enableClipboard = ns.enableClipboard;
+  state.appSettings.search.limitClipboardText = ns.limitClipboardText;
   state.appSettings.search.maxResults = ns.maxResults;
+  state.appSettings.privacy = { ...ns.privacy };
+  // `ns.ai` is the redacted payload: it reports whether keys exist, never
+  // their values.
   state.appSettings.ai = { ...ns.ai };
+  keyCleared.openai = false;
+  keyCleared.gemini = false;
+  dom.setOpenaiApiKey.value = '';
+  dom.setGeminiApiKey.value = '';
+  updateKeyStateLabels();
 
   dom.btnNewChat.style.display =
     state.isAiMode && state.appSettings.ai.useContext ? 'flex' : 'none';

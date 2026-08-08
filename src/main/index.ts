@@ -2,7 +2,13 @@ import { app, clipboard, ipcMain, shell } from 'electron';
 import { execFile } from 'child_process';
 import * as path from 'path';
 import { isLinux, isMac } from './platform';
-import { getConfig, loadConfig, saveConfig } from './config';
+import {
+  getConfig,
+  getPublicConfig,
+  loadConfig,
+  saveConfig,
+  unlockSecrets,
+} from './config';
 import {
   loadChatHistory,
   getChatHistory,
@@ -10,13 +16,23 @@ import {
   clearMemoryAndFile,
 } from './chat-history';
 import { runSafeCommand } from './safe-commands';
-import { validateSettings } from './settings-validator';
+import { redactSettingsPayload, validateSettings } from './settings-validator';
 import { askAi, resetContext } from './ai-manager';
-import { search } from './search-engine';
+import { clearClipboardHistory, search } from './search-engine';
 import { getIconPath } from './providers/icons';
-import { fetchExchangeRates } from './providers/exchange-rates';
 import { getApplications } from './providers/applications';
 import { getBookmarks } from './providers/bookmarks';
+import {
+  isAllowedPath,
+  isAllowedUrl,
+  rememberResultTargets,
+} from './result-guard';
+import { isSafeExternalUrl } from './sanitize';
+import {
+  applyProcessHardening,
+  applyRuntimeHardening,
+  disableChromiumFeature,
+} from './security';
 import {
   activateWindow,
   createWindow,
@@ -26,7 +42,7 @@ import {
   resizeWindow,
   showWindow,
 } from './window';
-import { startClipboardMonitoring } from './clipboard-monitor';
+import { syncClipboardMonitoring } from './clipboard-monitor';
 import {
   getWaylandToggleCommand,
   isWaylandHotkeyEnv,
@@ -34,27 +50,10 @@ import {
   unregisterAll,
 } from './hotkey';
 import { applyAutoLaunch } from './auto-launch';
-import type {
-  AliasAction,
-  SafeCommandAction,
-  SaveSettingsResult,
-} from '../shared/types';
+import type { SafeCommandAction, SaveSettingsResult } from '../shared/types';
 
-// --- Chromium feature flags -----------------------------------------------
-// `appendSwitch('disable-features', X)` overwrites rather than concatenates
-// across calls, so route every feature through a single accumulating helper.
-// This keeps future additions safe from silently clobbering earlier ones.
-// Applied from `startPrimaryInstance()` only: secondary instances call
-// `app.quit()` before Chromium initializes, so setting switches on them is
-// wasted work.
-const disabledChromiumFeatures = new Set<string>();
-function disableChromiumFeature(name: string): void {
-  disabledChromiumFeatures.add(name);
-  app.commandLine.appendSwitch(
-    'disable-features',
-    Array.from(disabledChromiumFeatures).join(',')
-  );
-}
+/** Upper bound on text the renderer may push into the system clipboard. */
+const MAX_CLIPBOARD_WRITE_LENGTH = 100_000;
 
 // --- Single-instance + CLI control ---------------------------------------
 // On Wayland, Electron's `globalShortcut` API cannot register a system-wide
@@ -157,12 +156,16 @@ if (!gotSingleInstanceLock) {
 }
 
 function startPrimaryInstance(): void {
+  // Command-line level hardening: Chromium's background services that phone
+  // home, plus the renderer sandbox. Must be applied before
+  // `app.whenReady()` so Chromium picks it up during initialization;
+  // `startPrimaryInstance()` runs synchronously from the module body, well
+  // before `whenReady` resolves.
+  applyProcessHardening();
+
   // Suppress benign Chromium/Wayland color management warnings on Linux.
   // These show up on KDE/GNOME with HDR-aware compositors and have no
-  // effect on functionality — they only clutter the debug log. Must be
-  // applied before `app.whenReady()` so Chromium picks them up during
-  // initialization; `startPrimaryInstance()` runs synchronously from the
-  // module body, well before `whenReady` resolves.
+  // effect on functionality — they only clutter the debug log.
   if (isLinux) {
     disableChromiumFeature('WaylandWpColorManagement');
   }
@@ -172,18 +175,24 @@ function startPrimaryInstance(): void {
   });
 
   loadConfig();
-  loadChatHistory();
 
-  // Warm caches in the background — no need to await.
-  fetchExchangeRates();
+  // Local, offline caches only. Exchange rates used to be prefetched here,
+  // which meant every launch contacted a third-party API whether or not the
+  // user ever converted a currency; that request is now made lazily.
   getApplications();
   getBookmarks();
 
   app.whenReady().then(async () => {
+    // `safeStorage` is only usable once the app is ready, so the encrypted
+    // API keys are decrypted here rather than in `loadConfig()`.
+    unlockSecrets();
+    loadChatHistory();
+
+    applyRuntimeHardening();
     registerIpcHandlers();
     createWindow();
     mainWindowReady = true;
-    startClipboardMonitoring();
+    syncClipboardMonitoring();
     await registerHotkey();
     applyAutoLaunch(getConfig().autoLaunch === true);
 
@@ -222,137 +231,190 @@ function startPrimaryInstance(): void {
   });
 }
 
-function isHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
+/**
+ * Every IPC message must originate from our own renderer.
+ *
+ * Without this check any `WebContents` in the process — a future window, an
+ * accidentally attached devtools extension, a `<webview>` — could drive the
+ * privileged handlers below. `ipcMain` is process-global, so the sender check
+ * belongs on each channel rather than on the window.
+ */
+function isTrustedSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
+  const win = getMainWindow();
+  if (!win || win.isDestroyed()) return false;
+  if (event.sender !== win.webContents) {
+    console.warn('[security] Rejected IPC message from an unexpected sender.');
     return false;
   }
+  return true;
+}
+
+/** Registers a fire-and-forget channel that only our renderer can use. */
+function onTrusted(
+  channel: string,
+  handler: (event: Electron.IpcMainEvent, payload: unknown) => void
+): void {
+  ipcMain.on(channel, (event, payload: unknown) => {
+    if (!isTrustedSender(event)) return;
+    try {
+      handler(event, payload);
+    } catch (e) {
+      console.error(`IPC error ${channel}:`, (e as Error).message);
+    }
+  });
+}
+
+/** Registers a request/response channel that only our renderer can use. */
+function handleTrusted<T>(
+  channel: string,
+  handler: (event: Electron.IpcMainInvokeEvent, payload: unknown) => T | Promise<T>
+): void {
+  ipcMain.handle(channel, async (event, payload: unknown) => {
+    if (!isTrustedSender(event)) throw new Error('Unauthorized IPC sender.');
+    return handler(event, payload);
+  });
 }
 
 function registerIpcHandlers(): void {
   ipcMain.on('renderer-ready', (event) => {
-    const win = getMainWindow();
-    if (win && event.sender === win.webContents) markRendererReady();
+    if (isTrustedSender(event)) markRendererReady();
   });
 
-  ipcMain.on('window-hide', hideWindow);
+  onTrusted('window-hide', () => hideWindow());
 
-  ipcMain.on('window-resize', (_, height: number) => {
-    try {
-      resizeWindow(height);
-    } catch (e) {
-      console.error('IPC error window-resize:', e);
+  onTrusted('window-resize', (_event, height) => {
+    if (typeof height !== 'number' || !Number.isFinite(height)) return;
+    resizeWindow(height);
+  });
+
+  onTrusted('app-launch', (_event, appPath) => {
+    // Only paths that were actually offered to the user in a search result
+    // can be launched — see `result-guard.ts`.
+    if (!isAllowedPath(appPath)) {
+      console.warn('[security] Blocked launch of a path that was never in a result set.');
+      hideWindow();
+      return;
     }
-  });
 
-  ipcMain.on('app-launch', (_, appPath: string) => {
-    try {
-      if (isLinux && appPath.endsWith('.desktop')) {
-        execFile('gio', ['launch', appPath], (err) => {
-          if (err) {
-            const appName = path.basename(appPath, '.desktop');
-            execFile('gtk-launch', [appName]);
-          }
-        });
-      } else if (isMac && appPath.endsWith('.app')) {
-        execFile('open', [appPath]);
-      } else {
-        shell.openPath(appPath);
-      }
-    } catch (e) {
-      console.error('IPC error app-launch:', e);
-    }
-    hideWindow();
-  });
-
-  ipcMain.on('item-show-folder', (_, itemPath: string) => {
-    try {
-      shell.showItemInFolder(itemPath);
-    } catch (e) {
-      console.error('IPC error item-show-folder:', e);
+    if (isLinux && appPath.endsWith('.desktop')) {
+      execFile('gio', ['launch', appPath], (err) => {
+        if (err) {
+          const appName = path.basename(appPath, '.desktop');
+          execFile('gtk-launch', [appName]);
+        }
+      });
+    } else if (isMac && appPath.endsWith('.app')) {
+      execFile('open', [appPath]);
+    } else {
+      void shell.openPath(appPath);
     }
     hideWindow();
   });
 
-  ipcMain.on('url-open', (_, url: string) => {
-    try {
-      if (isHttpUrl(url)) {
-        shell.openExternal(url);
-      } else {
-        console.warn('Blocked non-http URL:', url);
-      }
-    } catch (e) {
-      console.error('IPC error url-open:', e);
+  onTrusted('item-show-folder', (_event, itemPath) => {
+    if (!isAllowedPath(itemPath)) {
+      console.warn('[security] Blocked reveal of a path that was never in a result set.');
+      hideWindow();
+      return;
     }
+    shell.showItemInFolder(itemPath);
     hideWindow();
   });
 
-  ipcMain.on('clipboard-copy', (_, text: string) => {
-    clipboard.writeText(text);
+  onTrusted('url-open', (_event, url) => {
+    // Two independent checks: the URL must be one we published in a result,
+    // and it must still be a plain http(s) URL by the time we open it.
+    if (!isAllowedUrl(url) || !isSafeExternalUrl(url)) {
+      console.warn('[security] Blocked opening an unexpected URL.');
+      hideWindow();
+      return;
+    }
+    void shell.openExternal(url);
+    hideWindow();
+  });
+
+  onTrusted('clipboard-copy', (_event, text) => {
+    if (typeof text !== 'string' || !text) return;
+    clipboard.writeText(text.slice(0, MAX_CLIPBOARD_WRITE_LENGTH));
     setTimeout(hideWindow, 300);
   });
 
-  ipcMain.on('command-run', (_, action: SafeCommandAction) => {
-    runSafeCommand(action);
+  onTrusted('clipboard-history-clear', () => {
+    clearClipboardHistory();
+  });
+
+  onTrusted('command-run', (_event, action) => {
+    runSafeCommand(action as SafeCommandAction);
     hideWindow();
   });
 
-  ipcMain.on('alias-run', (_, actions: AliasAction[]) => {
-    try {
-      if (!Array.isArray(actions)) {
-        console.warn('Blocked invalid alias payload:', actions);
-        hideWindow();
-        return;
-      }
+  onTrusted('alias-run', (_event, aliasKey) => {
+    // The renderer sends only the alias name; the actions are resolved from
+    // our own validated config, so no URL or command identifier can be
+    // injected over IPC.
+    if (typeof aliasKey !== 'string') {
+      hideWindow();
+      return;
+    }
+    const aliases = getConfig().aliases;
+    const actions = Object.hasOwn(aliases, aliasKey) ? aliases[aliasKey] : undefined;
+    if (!actions) {
+      console.warn('[security] Blocked run of an unknown alias.');
+      hideWindow();
+      return;
+    }
 
-      actions.forEach((action) => {
-        if (action && action.type === 'url' && typeof action.url === 'string') {
-          if (isHttpUrl(action.url)) {
-            shell.openExternal(action.url);
-          } else {
-            console.warn('Blocked non-http alias URL:', action.url);
-          }
-        } else {
-          runSafeCommand(action);
-        }
-      });
-    } catch (e) {
-      console.error('IPC error alias-run:', e);
+    for (const action of actions) {
+      if (action.type === 'url') {
+        if (isSafeExternalUrl(action.url)) void shell.openExternal(action.url);
+        else console.warn('[security] Blocked unsafe alias URL.');
+      } else {
+        runSafeCommand(action);
+      }
     }
     hideWindow();
   });
 
-  ipcMain.handle('search', async (_, query: string) => {
-    return search(query);
+  handleTrusted('search', async (_event, query) => {
+    if (typeof query !== 'string') return [];
+    const results = await search(query);
+    // Record what the user can now see, so the open/launch channels above
+    // have something to validate against.
+    rememberResultTargets(results);
+    return results;
   });
 
-  ipcMain.handle('ask-ai', async (_, prompt: string) => {
+  handleTrusted('ask-ai', async (_event, prompt) => {
+    if (typeof prompt !== 'string') throw new Error('Invalid prompt.');
     return askAi(prompt);
   });
 
-  ipcMain.on('reset-ai-context', () => {
+  onTrusted('reset-ai-context', () => {
     resetContext();
   });
 
-  ipcMain.handle('get-chat-history', () => {
+  handleTrusted('get-chat-history', () => {
     return getChatHistory();
   });
 
-  ipcMain.handle('delete-chat-history', (_, id: string) => {
+  handleTrusted('delete-chat-history', (_event, id) => {
+    if (typeof id !== 'string') return false;
     return deleteChatEntry(id);
   });
 
-  ipcMain.handle('get-icon', async (_, iconName: string) => {
+  handleTrusted('get-icon', async (_event, iconName) => {
+    if (typeof iconName !== 'string') return null;
     return getIconPath(iconName);
   });
 
-  ipcMain.handle('get-settings', () => {
-    return getConfig();
+  handleTrusted('get-settings', () => {
+    // Redacted on purpose: the renderer learns whether an API key exists,
+    // never what it is.
+    return getPublicConfig();
   });
 
   ipcMain.on('save-settings', async (event, newSettings: unknown) => {
+    if (!isTrustedSender(event)) return;
     const result = validateSettings(newSettings);
     if (!result.ok) {
       event.reply('save-settings-result', { ok: false, error: result.error });
@@ -377,12 +439,18 @@ function registerIpcHandlers(): void {
       enableFiles: safe.enableFiles,
       enableBookmarks: safe.enableBookmarks,
       enableWebSearch: safe.enableWebSearch,
+      webSearchEngine: safe.webSearchEngine,
       enableSysCommands: safe.enableSysCommands,
       enableCalculator: safe.enableCalculator,
       enableClipboard: safe.enableClipboard,
       limitClipboardText: safe.limitClipboardText,
       maxResults: safe.maxResults,
     });
+    config.privacy = { ...safe.privacy };
+
+    // Start/stop the clipboard watcher to match the new settings. Turning the
+    // module off takes effect immediately and drops what was collected.
+    syncClipboardMonitoring();
 
     Object.assign(config.ai, {
       provider: safe.ai.provider,
@@ -425,7 +493,12 @@ function registerIpcHandlers(): void {
     // The main-process `showWaylandNotice()` dialog (triggered by the
     // `void registerHotkey()` above) handles the first-run case with a
     // "Don't show again" checkbox.
-    const reply: SaveSettingsResult = { ok: true, settings: safe };
+    // The echo back to the renderer goes through the redactor so a saved API
+    // key never travels in the other direction either.
+    const reply: SaveSettingsResult = {
+      ok: true,
+      settings: redactSettingsPayload(safe),
+    };
     const hotkeyChanged = previousHotkey !== safe.hotkey;
     if (
       onWayland &&

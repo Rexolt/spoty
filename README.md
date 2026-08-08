@@ -122,8 +122,7 @@ Download the **Installer** (`.exe`) or the **Portable** version from [**Releases
 
 | Prefix | Function | Example |
 |---|---|---|
-| `g ` or `? ` | Web search | `g electron docs` |
-| `>` | Run terminal command | `>htop` |
+| `g ` or `? ` | Web search (DuckDuckGo by default) | `g electron docs` |
 | `weather ` | Weather lookup | `weather london` |
 | `clip` | Clipboard history | `clip` |
 | *(number)* | Calculator | `(5+3)*2` |
@@ -179,27 +178,55 @@ Settings are accessible via the **gear icon** in the app, or by editing the conf
 
 ```
 spoty/
-├── main.js          # Electron main process (search, AI, IPC)
-├── preload.js       # Secure IPC bridge with channel whitelist
 ├── src/
-│   ├── index.html   # App shell with CSP
-│   ├── renderer.js  # UI logic, keyboard navigation, i18n
-│   └── styles.css   # Theming, animations, frosted glass
-├── build/icons/     # App icons (ico, png)
-└── package.json     # Config, scripts, electron-builder
+│   ├── main/              # Electron main process
+│   │   ├── index.ts       # Lifecycle, CLI flags, IPC handlers
+│   │   ├── security.ts    # Sandbox, CSP backstop, permissions, navigation
+│   │   ├── net.ts         # The only outbound-request path (host allowlist)
+│   │   ├── secrets.ts     # API keys encrypted via the OS keychain
+│   │   ├── result-guard.ts# Capability scoping for launch/open channels
+│   │   ├── sanitize.ts    # Shared validators for config + IPC input
+│   │   ├── preload.ts     # IPC bridge with per-direction channel allowlist
+│   │   └── providers/     # Apps, files, bookmarks, weather, rates, icons
+│   ├── renderer/          # UI (no third-party runtime dependencies)
+│   │   ├── markdown.ts    # Local Markdown → DOM renderer
+│   │   └── …              # Search, AI chat, settings, i18n, keyboard
+│   ├── shared/types.ts    # Types shared across the IPC boundary
+│   ├── index.html         # App shell with a strict CSP
+│   └── styles.css         # Theming, animations, frosted glass
+├── build/icons/           # App icons (ico, png)
+└── package.json           # Config, scripts, electron-builder
 ```
 
 ---
 
-## 🔒 Security
+## 🔒 Privacy & Security
 
-- **Context Isolation** — Renderer has no access to Node.js
-- **Sandbox** — Renderer runs in a sandboxed process
-- **IPC Whitelist** — Only known channels are allowed in preload
-- **CSP** — Content Security Policy blocks inline scripts
-- **Safe Math** — Calculator uses a custom parser, not `eval()`
-- **URL Validation** — `shell.openExternal` only allows `http(s)://`
-- **Ollama Guard** — SSRF protection: only `localhost` is allowed
+Spoty has no telemetry, no analytics and no update pings, and it makes no
+network request at startup. See **[PRIVACY.md](PRIVACY.md)** for the full
+data-flow inventory — every endpoint, every stored file, and how to switch each
+one off.
+
+Highlights:
+
+- **Offline mode** — one switch that blocks every outbound request in the main
+  process; a local Ollama keeps working.
+- **No third-party code at runtime** — Markdown is rendered locally, so nothing
+  is loaded from a CDN and no external script can touch the window.
+- **Encrypted API keys** — stored via the OS keychain (`safeStorage`), in a
+  `0600` file inside a `0700` directory, and never sent to the UI process.
+- **Strict CSP** — `default-src 'none'`, `script-src 'self'`, `connect-src 'none'`,
+  with renderer network requests additionally cancelled at the session level.
+- **Sandboxed renderer** — context isolation, no Node integration, no
+  `<webview>`, no DevTools in packaged builds, all permissions denied.
+- **Capability-scoped IPC** — channels are allowlisted per direction, senders are
+  verified, and only paths/URLs that appeared in a recent search result can be
+  opened.
+- **No shell** — system commands run via `execFile` from a fixed allowlist.
+- **Safe Math** — the calculator uses a custom parser, not `eval()`.
+- **Ollama guard** — SSRF protection: only loopback addresses are accepted.
+- **Clipboard restraint** — history is memory-only, expires, skips content
+  marked sensitive by password managers, and is only collected while enabled.
 
 ---
 

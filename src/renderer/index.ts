@@ -8,6 +8,7 @@ import { closeAiHistory, deleteAllHistory, deleteHistoryEntry, openAiHistory, vi
 import {
   applySaveResult,
   bindAiProviderToggle,
+  bindPrivacyControls,
   hideSettings,
   populateSettingsUI,
   saveSettings,
@@ -100,6 +101,7 @@ function setupEventListeners(): void {
   dom.btnSaveSettings.addEventListener('click', saveSettings);
 
   bindAiProviderToggle();
+  bindPrivacyControls();
 
   dom.btnNewChat.addEventListener('click', resetAiContext);
 

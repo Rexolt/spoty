@@ -1,3 +1,46 @@
+## 🛡️ v3.3.0 — Privacy & Hardening
+
+Full data-flow inventory: **[PRIVACY.md](PRIVACY.md)**.
+
+### 🔌 Nothing leaves the machine unless you ask
+
+- **No CDN at runtime** — `marked` and `DOMPurify` were fetched from jsdelivr.net on every launch. Markdown is now rendered by a local parser that builds DOM nodes directly, so no third party learns that Spoty is running and none can inject code into the window.
+- **No startup traffic** — exchange rates are no longer prefetched during launch; they are fetched only for an actual currency conversion, and cached for an hour.
+- **No spellcheck dictionary downloads** — Chromium's spellchecker (which pulls dictionaries from a Google CDN) is disabled.
+- **Chromium background services off** — domain reliability reporting, hyperlink auditing pings, the component updater, translation, autofill server communication, optimization hints, media-router discovery and network time queries.
+- **Offline mode** — a single switch that blocks every outbound request in the main process. A local Ollama keeps working.
+- **Per-provider switches** for weather and currency lookups, and a **configurable web search engine** now defaulting to DuckDuckGo.
+- **Weather lookups are debounced and cached**, so typing a city name no longer sends a request for each prefix.
+
+### 🔑 Secrets
+
+- **API keys are encrypted at rest** via the OS keychain (`safeStorage`: kwallet/gnome-keyring, macOS Keychain, Windows DPAPI). Existing plaintext keys are migrated automatically. When no keychain exists, the Privacy tab says so instead of implying encryption.
+- **Keys are never sent to the UI process** — the settings form learns only whether a key exists. New "Delete stored key" buttons remove one explicitly.
+- **The Gemini key moved from the URL query string into a header**, keeping it out of proxy logs.
+- **Config and history files are written `0600` inside a `0700` directory**, atomically via a temp file + rename.
+
+### 🧷 Clipboard restraint
+
+- Collection **only runs while the clipboard module is enabled** (it previously ran regardless of the setting).
+- Content marked sensitive by password managers is **skipped** (per-platform "concealed" clipboard markers).
+- History **expires** after a configurable retention window (default 60 minutes), stays memory-only, and can be purged on demand.
+
+### 🔒 Renderer lockdown
+
+- **Strict CSP**: `default-src 'none'`, `script-src 'self'`, `connect-src 'none'` (was `script-src` with a CDN and `connect-src *`).
+- Renderer network requests are additionally **cancelled at the session level**; navigation, `window.open` and `<webview>` attachment are blocked; **all permissions denied** (camera, mic, geolocation, screen capture, USB/HID); OS sandbox forced on; **DevTools disabled in packaged builds**.
+- **No HTML string building**: search results, AI replies and chat history are constructed as DOM nodes, so model output can no longer become markup. AI-authored links render as text rather than clickable anchors.
+
+### 🚧 IPC as a capability boundary
+
+- Every message's **sender is verified** against the main window, and payloads are type-checked.
+- `app-launch`, `item-show-folder` and `url-open` now only accept **paths and URLs that actually appeared in a recent search result** — renderer code execution no longer implies arbitrary program execution.
+- **Aliases are resolved by name** from the validated config instead of being sent as command lists from the UI.
+- Icon resolution is restricted to known icon roots, so it cannot be used to probe the filesystem.
+- Config loading is fully re-validated (size caps, enum/range checks, prototype-pollution-safe merge), and hotkeys, model names and API keys are constrained to inert character sets.
+
+---
+
 ## 🧮 v3.2.4 — Precision & Stability
 
 ### 🔢 Calculator Enhancements

@@ -5,8 +5,23 @@ import { clearResults, executeItem, performSearch, selectItem } from './search-r
 import { resetAiContext, showAiHistoryHint, startAiChat } from './ai-chat';
 import { hideSettings, saveSettings, showSettings, switchSettingsTab } from './settings';
 
-const SETTINGS_TABS = ['general', 'search', 'modules', 'ai', 'aliases'] as const;
+const SETTINGS_TABS = ['general', 'search', 'modules', 'ai', 'privacy', 'aliases'] as const;
 type TabName = (typeof SETTINGS_TABS)[number];
+
+const SEARCH_DEBOUNCE_MS = 150;
+
+/**
+ * Queries that can reach a remote endpoint wait noticeably longer before being
+ * dispatched. With the normal 150 ms debounce, typing "weather Budapest" sent a
+ * request for most prefixes of the city name, handing the endpoint a
+ * keystroke-level view of the input. Everything local keeps the snappy delay.
+ */
+const NETWORK_DEBOUNCE_MS = 700;
+const NETWORK_QUERY_PATTERN = /^(?:időjárás|weather)\s/i;
+
+function debounceForQuery(query: string): number {
+  return NETWORK_QUERY_PATTERN.test(query) ? NETWORK_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS;
+}
 
 export function handleSearchInput(e: Event): void {
   const target = e.target as HTMLInputElement;
@@ -23,7 +38,7 @@ export function handleSearchInput(e: Event): void {
 
   state.searchTimeout = setTimeout(() => {
     void performSearch(query);
-  }, 150);
+  }, debounceForQuery(query));
 }
 
 export function clearSearch(): void {
@@ -144,7 +159,7 @@ export function handleSettingsKeyboard(e: KeyboardEvent): void {
       (activeType === 'text' || activeType === 'password' || activeType === 'number')) ||
     activeTag === 'textarea';
 
-  if (!isTextInput && e.key >= '1' && e.key <= '5') {
+  if (!isTextInput && e.key >= '1' && e.key <= '6') {
     e.preventDefault();
     const idx = parseInt(e.key, 10) - 1;
     if (SETTINGS_TABS[idx]) switchSettingsTab(SETTINGS_TABS[idx] as TabName);

@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, app, screen } from 'electron';
 import * as path from 'path';
 import { iconPath, isMac } from './platform';
 import { getConfig } from './config';
@@ -50,7 +50,21 @@ export function createWindow(): BrowserWindow {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      // No embedded browsing contexts: the UI is a single local document.
+      webviewTag: false,
+      // Chromium downloads spellcheck dictionaries from a Google CDN on first
+      // use. Nothing here needs spellchecking, so don't create the traffic.
+      spellcheck: false,
+      // DevTools are a debugging aid, not a shipping feature: leaving them
+      // reachable in a packaged build gives anything that can drive the app a
+      // console inside the renderer.
+      devTools: !app.isPackaged,
     },
   };
 

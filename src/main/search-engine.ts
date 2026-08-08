@@ -1,4 +1,3 @@
-import { clipboard } from 'electron';
 import { getConfig } from './config';
 import { t } from './i18n';
 import { safeEvaluateMath } from './safe-math';
@@ -7,21 +6,40 @@ import { searchFiles } from './providers/files';
 import { searchBookmarks } from './providers/bookmarks';
 import { fetchWeather } from './providers/weather';
 import { fetchExchangeRates } from './providers/exchange-rates';
-import type { SearchResult, SafeCommandId } from '../shared/types';
+import type { SearchResult, SafeCommandId, WebSearchEngine } from '../shared/types';
 
 interface ClipboardEntry {
   text: string;
   time: string;
+  /** Capture time in epoch millis, used to expire the entry. */
+  at: number;
 }
 
-/** In-memory clipboard history populated by `clipboard-monitor.ts`. */
+/**
+ * In-memory clipboard history populated by `clipboard-monitor.ts`. Never
+ * written to disk: copied secrets should not outlive the process, let alone
+ * end up in a backup.
+ */
 const clipboardHistory: ClipboardEntry[] = [];
 
 const MAX_CLIPBOARD_TEXT_LENGTH = 50_000;
+const MAX_CLIPBOARD_ENTRIES = 20;
+
+/** Drops entries older than the configured retention window. */
+function pruneClipboardHistory(): void {
+  const retentionMs = getConfig().privacy.clipboardRetentionMinutes * 60_000;
+  const cutoff = Date.now() - retentionMs;
+  for (let i = clipboardHistory.length - 1; i >= 0; i--) {
+    if (clipboardHistory[i].at < cutoff) clipboardHistory.splice(i, 1);
+  }
+}
 
 export function recordClipboardEntry(text: string): void {
   const config = getConfig();
-  if (!text || clipboardHistory.some((item) => item.text === text)) return;
+  if (!text) return;
+
+  pruneClipboardHistory();
+  if (clipboardHistory.some((item) => item.text === text)) return;
 
   let entryText = text;
   if (
@@ -31,16 +49,22 @@ export function recordClipboardEntry(text: string): void {
     entryText = entryText.substring(0, MAX_CLIPBOARD_TEXT_LENGTH) + '...';
   }
 
-  clipboardHistory.unshift({ text: entryText, time: new Date().toISOString() });
-  if (clipboardHistory.length > 20) clipboardHistory.pop();
-}
-
-export function pollClipboard(): void {
-  recordClipboardEntry(clipboard.readText());
+  clipboardHistory.unshift({
+    text: entryText,
+    time: new Date().toISOString(),
+    at: Date.now(),
+  });
+  if (clipboardHistory.length > MAX_CLIPBOARD_ENTRIES) clipboardHistory.pop();
 }
 
 export function getClipboardHistory(): ClipboardEntry[] {
+  pruneClipboardHistory();
   return clipboardHistory;
+}
+
+/** Forgets everything collected so far (module disabled, or user request). */
+export function clearClipboardHistory(): void {
+  clipboardHistory.length = 0;
 }
 
 const SYS_COMMANDS: Record<string, { id: SafeCommandId; label: () => string }> = {
@@ -60,6 +84,31 @@ const UNIT_CONVERSIONS: Record<string, number> = {
   in: 0.0254, ft: 0.3048, yd: 0.9144, mi: 1609.344,
   mg: 0.001, g: 1, kg: 1000, oz: 28.3495, lb: 453.592,
 };
+
+/**
+ * Query templates for the supported engines. DuckDuckGo is the default: it
+ * neither profiles searchers nor ties a query to an account.
+ */
+const WEB_SEARCH_URLS: Record<WebSearchEngine, string> = {
+  duckduckgo: 'https://duckduckgo.com/?q=',
+  startpage: 'https://www.startpage.com/sp/search?query=',
+  brave: 'https://search.brave.com/search?q=',
+  ecosia: 'https://www.ecosia.org/search?q=',
+  google: 'https://www.google.com/search?q=',
+};
+
+const WEB_SEARCH_LABELS: Record<WebSearchEngine, string> = {
+  duckduckgo: 'DuckDuckGo',
+  startpage: 'Startpage',
+  brave: 'Brave Search',
+  ecosia: 'Ecosia',
+  google: 'Google',
+};
+
+/** Currency codes are exactly three letters; anything else is not a currency. */
+function looksLikeCurrencyCode(value: string): boolean {
+  return /^[a-z]{3}$/i.test(value);
+}
 
 async function tryConverter(query: string): Promise<SearchResult | null> {
   const match = query.match(/^([\d.,]+)\s*([a-zA-Z]+)\s+(?:in|to|ba|be)\s+([a-zA-Z]+)$/i);
@@ -101,12 +150,24 @@ async function tryConverter(query: string): Promise<SearchResult | null> {
     };
   }
 
-  // Currency
+  // Currency. This is the only branch that needs the network, so it is
+  // reached only for genuinely currency-shaped queries and only when the
+  // user has left the module enabled — no rates are prefetched at startup.
+  const config = getConfig();
+  if (
+    !config.privacy.enableCurrency ||
+    config.privacy.offlineMode ||
+    !looksLikeCurrencyCode(from) ||
+    !looksLikeCurrencyCode(to)
+  ) {
+    return null;
+  }
+
   const rates = await fetchExchangeRates();
   if (rates && rates[from.toUpperCase()] && rates[to.toUpperCase()]) {
     const usd = amount / rates[from.toUpperCase()];
     const final = usd * rates[to.toUpperCase()];
-    const locale = getConfig().language === 'en' ? 'en-US' : 'hu-HU';
+    const locale = config.language === 'en' ? 'en-US' : 'hu-HU';
     return {
       type: 'calc',
       name: `${amount} ${from.toUpperCase()} = ${final.toLocaleString(locale, {
@@ -120,13 +181,19 @@ async function tryConverter(query: string): Promise<SearchResult | null> {
   return null;
 }
 
-export async function search(query: string): Promise<SearchResult[]> {
+/** Queries longer than this are pointless and only widen the input surface. */
+const MAX_QUERY_LENGTH = 512;
+
+export async function search(rawQuery: string): Promise<SearchResult[]> {
+  if (typeof rawQuery !== 'string') return [];
+  const query = rawQuery.slice(0, MAX_QUERY_LENGTH);
+
   const results: SearchResult[] = [];
   const config = getConfig();
 
   // Weather first — exclusive result if a hit
   const weatherMatch = query.match(/^(?:időjárás|weather)\s+(.+)$/i);
-  if (weatherMatch) {
+  if (weatherMatch && config.privacy.enableWeather && !config.privacy.offlineMode) {
     const city = weatherMatch[1].trim();
     const weather = await fetchWeather(city);
     if (weather) return [weather];
@@ -134,13 +201,15 @@ export async function search(query: string): Promise<SearchResult[]> {
 
   const qLower = query.toLowerCase();
 
-  // Aliases
-  if (config.aliases && config.aliases[qLower]) {
+  // Aliases. Only the key travels to the renderer; the main process resolves
+  // it against its own config when the user runs it.
+  if (config.aliases && Object.hasOwn(config.aliases, qLower)) {
     const commands = config.aliases[qLower];
     results.push({
       type: 'alias',
       name: `${t('alias')}: ${qLower}`,
-      commands,
+      aliasKey: qLower,
+      aliasCount: commands.length,
       description: `${t('aliasMulti')} (${commands.length} ${t('aliasItems')})`,
     });
   }
@@ -152,11 +221,12 @@ export async function search(query: string): Promise<SearchResult[]> {
   ) {
     const webQuery = query.substring(2).trim();
     if (webQuery) {
+      const engine = config.search.webSearchEngine;
       results.push({
         type: 'web',
         name: `${t('webSearch')}: ${webQuery}`,
-        url: `https://www.google.com/search?q=${encodeURIComponent(webQuery)}`,
-        description: t('webSearchEngine'),
+        url: `${WEB_SEARCH_URLS[engine]}${encodeURIComponent(webQuery)}`,
+        description: `${t('webSearchEngine')} (${WEB_SEARCH_LABELS[engine]})`,
       });
     }
   }
@@ -190,7 +260,7 @@ export async function search(query: string): Promise<SearchResult[]> {
   }
   // Clipboard history
   else if (config.search.enableClipboard && qLower === 'clip') {
-    return clipboardHistory.map<SearchResult>((item) => ({
+    return getClipboardHistory().map<SearchResult>((item) => ({
       type: 'clipboard',
       name: item.text.substring(0, 50),
       value: item.text,

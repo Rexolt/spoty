@@ -2,7 +2,6 @@ import { dom } from './dom';
 import { api } from './electron-api';
 import { state } from './state';
 import { getDict, type DictKey } from './i18n';
-import { escapeHtml } from './utils';
 import { updateWindowSize } from './window-size';
 import type { SearchResult } from '../shared/types';
 
@@ -33,48 +32,54 @@ function buildIcon(item: SearchResult): HTMLDivElement {
 
   switch (item.type) {
     case 'weather':
-      icon.innerHTML = '⛅';
+      icon.textContent = '⛅';
       return icon;
     case 'calc':
-      icon.innerHTML = '🧮';
+      icon.textContent = '🧮';
       return icon;
     case 'command':
-      icon.innerHTML = '⚡';
+      icon.textContent = '⚡';
       return icon;
     case 'syscommand':
-      icon.innerHTML = '⚙️';
+      icon.textContent = '⚙️';
       return icon;
     case 'web':
-      icon.innerHTML = '🌐';
+      icon.textContent = '🌐';
       return icon;
     case 'clipboard':
-      icon.innerHTML = '📋';
+      icon.textContent = '📋';
       return icon;
     case 'file':
-      icon.innerHTML = '📄';
+      icon.textContent = '📄';
       return icon;
   }
 
   if (item.iconPath) {
-    const img = document.createElement('img');
-    img.src = `file://${item.iconPath}`;
-    img.onerror = () => {
-      icon.innerHTML = '📦';
-    };
-    icon.appendChild(img);
+    icon.appendChild(createIconImage(item.iconPath, icon));
     return icon;
   }
 
-  icon.innerHTML = '📦';
+  icon.textContent = '📦';
   void loadIcon(item.icon).then((p) => {
-    if (p) {
-      const img = document.createElement('img');
-      img.src = `file://${p}`;
-      icon.innerHTML = '';
-      icon.appendChild(img);
-    }
+    if (p) icon.replaceChildren(createIconImage(p, icon));
   });
   return icon;
+}
+
+/**
+ * Builds the `<img>` for an icon. The path is percent-encoded per segment: it
+ * originates from a `.desktop` file on disk rather than from us, and splicing
+ * it raw into a `file://` URL would let characters such as `#` or `?` change
+ * which file actually gets loaded.
+ */
+function createIconImage(iconPath: string, container: HTMLElement): HTMLImageElement {
+  const img = document.createElement('img');
+  img.src = `file://${iconPath.split('/').map(encodeURIComponent).join('/')}`;
+  img.alt = '';
+  img.onerror = () => {
+    container.textContent = '📦';
+  };
+  return img;
 }
 
 function executeCommand(item: SearchResult, showFolder = false): void {
@@ -93,7 +98,9 @@ function executeCommand(item: SearchResult, showFolder = false): void {
       if (item.action) api.send('command-run', item.action);
       break;
     case 'alias':
-      if (item.commands) api.send('alias-run', item.commands);
+      // Only the alias name is sent; the main process resolves it against its
+      // own config rather than trusting a command list from the renderer.
+      if (item.aliasKey) api.send('alias-run', item.aliasKey);
       break;
     case 'web':
       if (item.url) api.send('url-open', item.url);
@@ -166,23 +173,62 @@ function createResultElement(item: SearchResult, index: number): HTMLDivElement 
   return div;
 }
 
+/** Builds the magnifier glyph used by the empty state. */
+function createSearchGlyph(): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', '24');
+  svg.setAttribute('height', '24');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+
+  const circle = document.createElementNS(ns, 'circle');
+  circle.setAttribute('cx', '11');
+  circle.setAttribute('cy', '11');
+  circle.setAttribute('r', '8');
+  const handle = document.createElementNS(ns, 'line');
+  handle.setAttribute('x1', '21');
+  handle.setAttribute('y1', '21');
+  handle.setAttribute('x2', '16.65');
+  handle.setAttribute('y2', '16.65');
+
+  svg.appendChild(circle);
+  svg.appendChild(handle);
+  return svg;
+}
+
+function renderEmptyState(query: string): void {
+  const dict = getDict(state.appSettings?.language);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'no-results fade-in';
+
+  const iconWrap = document.createElement('div');
+  iconWrap.className = 'no-results-icon';
+  iconWrap.appendChild(createSearchGlyph());
+  wrapper.appendChild(iconWrap);
+
+  const text = document.createElement('div');
+  text.className = 'no-results-text';
+  // `textContent`, so the query needs no escaping — it is never parsed as
+  // markup.
+  text.textContent = `${dict.no_results} "${query}"`;
+  wrapper.appendChild(text);
+
+  dom.resultsContainer.replaceChildren(wrapper);
+}
+
 export function renderResults(results: SearchResult[]): void {
-  dom.resultsContainer.innerHTML = '';
+  dom.resultsContainer.replaceChildren();
   state.selectedIndex = -1;
 
   if (results.length === 0) {
     dom.footer.style.display = 'none';
-    if (dom.searchInput.value) {
-      const dict = getDict(state.appSettings?.language);
-      dom.resultsContainer.innerHTML = `
-        <div class="no-results fade-in">
-          <div class="no-results-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          </div>
-          <div class="no-results-text">${dict.no_results} "${escapeHtml(dom.searchInput.value)}"</div>
-        </div>
-      `;
-    }
+    if (dom.searchInput.value) renderEmptyState(dom.searchInput.value);
     updateWindowSize();
     return;
   }
@@ -199,7 +245,7 @@ export function renderResults(results: SearchResult[]): void {
 export function clearResults(): void {
   state.currentResults = [];
   state.selectedIndex = -1;
-  dom.resultsContainer.innerHTML = '';
+  dom.resultsContainer.replaceChildren();
   dom.footer.style.display = 'none';
   updateWindowSize();
 }

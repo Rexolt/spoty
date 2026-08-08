@@ -1,5 +1,6 @@
 import { getConfig } from './config';
 import { addChatEntry } from './chat-history';
+import { isLoopbackHost, privacyFetch } from './net';
 import type { ChatMessage } from '../shared/types';
 
 const OPENAI_TIMEOUT_MS = 30_000;
@@ -7,7 +8,7 @@ const GEMINI_TIMEOUT_MS = 30_000;
 const OLLAMA_TIMEOUT_MS = 60_000;
 const MAX_CONTEXT_MESSAGES = 20;
 const MAX_PROMPT_LENGTH = 10_000;
-const ALLOWED_OLLAMA_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const MAX_RESPONSE_BYTES = 2_000_000;
 
 let conversationMessages: ChatMessage[] = [];
 let aiRequestCounter = 0;
@@ -87,6 +88,14 @@ interface OllamaResponse {
   message?: { content?: string };
 }
 
+function parseJson<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function callOpenAI(prompt: string): Promise<string> {
   const config = getConfig();
   if (!config.ai.openaiApiKey) {
@@ -97,8 +106,11 @@ async function callOpenAI(prompt: string): Promise<string> {
     ? [...conversationMessages]
     : [{ role: 'user' as const, content: prompt }];
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await privacyFetch('https://api.openai.com/v1/chat/completions', {
+    purpose: 'OpenAI request',
     method: 'POST',
+    timeoutMs: OPENAI_TIMEOUT_MS,
+    maxBytes: MAX_RESPONSE_BYTES,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.ai.openaiApiKey}`,
@@ -107,15 +119,17 @@ async function callOpenAI(prompt: string): Promise<string> {
       model: config.ai.openaiModel || 'gpt-4o-mini',
       messages,
     }),
-    signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
   });
 
+  const data = parseJson<OpenAiResponse>(response.text);
   if (!response.ok) {
-    const errData = (await response.json().catch(() => ({}))) as OpenAiResponse;
-    throw new Error(errData.error?.message || `OpenAI Hiba: ${response.status}`);
+    throw new Error(data?.error?.message || `OpenAI Hiba: ${response.status}`);
   }
-  const data = (await response.json()) as OpenAiResponse;
-  return data.choices[0].message.content;
+  const reply = data?.choices?.[0]?.message?.content;
+  if (!reply) {
+    throw new Error('Nem értelmezhető válasz érkezett az OpenAI API-tól.');
+  }
+  return reply;
 }
 
 async function callGemini(prompt: string): Promise<string> {
@@ -137,22 +151,31 @@ async function callGemini(prompt: string): Promise<string> {
     contents = [{ parts: [{ text: prompt }] }];
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+  const response = await privacyFetch(
+    // The model name is user-selectable, so keep it out of the path structure
+    // by encoding it; `:generateContent` must stay literal.
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
+      purpose: 'Gemini request',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      timeoutMs: GEMINI_TIMEOUT_MS,
+      maxBytes: MAX_RESPONSE_BYTES,
+      headers: {
+        'Content-Type': 'application/json',
+        // Passed as a header rather than the `?key=` query parameter Google's
+        // quickstart suggests: query strings end up in proxy logs, crash
+        // dumps and error messages.
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({ contents }),
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     }
   );
 
+  const data = parseJson<GeminiResponse>(response.text);
   if (!response.ok) {
-    const errData = (await response.json().catch(() => ({}))) as GeminiResponse;
-    throw new Error(errData.error?.message || `Gemini Hiba: ${response.status}`);
+    throw new Error(data?.error?.message || `Gemini Hiba: ${response.status}`);
   }
-  const data = (await response.json()) as GeminiResponse;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
     throw new Error('Nem értelmezhető válasz érkezett a Gemini API-tól.');
   }
@@ -169,7 +192,7 @@ async function callOllama(prompt: string): Promise<string> {
   } catch {
     throw new Error('Érvénytelen Ollama URL formátum.');
   }
-  if (!['http:', 'https:'].includes(parsed.protocol) || !ALLOWED_OLLAMA_HOSTS.has(parsed.hostname)) {
+  if (!['http:', 'https:'].includes(parsed.protocol) || !isLoopbackHost(parsed.hostname)) {
     throw new Error('Invalid Ollama URL: only localhost is allowed');
   }
 
@@ -186,19 +209,23 @@ async function callOllama(prompt: string): Promise<string> {
         stream: false,
       };
 
-  const response = await fetch(`${baseUrl}${endpoint}`, {
+  const response = await privacyFetch(`${baseUrl}${endpoint}`, {
+    purpose: 'Ollama request',
     method: 'POST',
+    timeoutMs: OLLAMA_TIMEOUT_MS,
+    maxBytes: MAX_RESPONSE_BYTES,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+    // Ollama runs on the machine; it is the one provider that stays local and
+    // therefore the one that still works in offline mode.
+    loopbackOnly: true,
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new Error(`Ollama Hiba: ${response.status} ${errText}`);
+    throw new Error(`Ollama Hiba: ${response.status}`);
   }
-  const data = (await response.json()) as OllamaResponse;
-  const reply = config.ai.useContext ? data.message?.content : data.response;
+  const data = parseJson<OllamaResponse>(response.text);
+  const reply = config.ai.useContext ? data?.message?.content : data?.response;
   if (!reply) {
     throw new Error('Üres válasz érkezett az Ollamától.');
   }
@@ -218,8 +245,22 @@ export function askAi(prompt: string): Promise<string> {
 
     const requestId = `${Date.now().toString(36)}-${(++aiRequestCounter).toString(36)}`;
 
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      throw new Error('Üres kérdést nem lehet elküldeni.');
+    }
     if (prompt.length > MAX_PROMPT_LENGTH) {
       throw new Error('A megadott szöveg túl hosszú.');
+    }
+
+    // Refuse before the prompt is added to the context, so a blocked request
+    // leaves no trace in the conversation. Ollama is exempt: it never leaves
+    // the machine.
+    if (config.privacy.offlineMode && config.ai.provider !== 'ollama') {
+      throw new Error(
+        config.language === 'hu'
+          ? 'Offline mód aktív: a felhős AI szolgáltatók le vannak tiltva. Használj Ollamát, vagy kapcsold ki az offline módot az Adatvédelem fülön.'
+          : 'Offline mode is on: cloud AI providers are disabled. Use Ollama, or turn offline mode off in the Privacy tab.'
+      );
     }
 
     if (config.ai.useContext) {

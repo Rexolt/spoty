@@ -3,8 +3,15 @@
 
 <head>
   <meta charset="UTF-8">
+  <!--
+    Locked-down CSP. The renderer loads no remote code (Markdown rendering is
+    local — see renderer/markdown.ts) and makes no network requests of its own:
+    all remote data is fetched by the main process. `connect-src 'none'`
+    therefore costs nothing and removes the exfiltration path that
+    `connect-src *` used to leave open next to the API-key form.
+  -->
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; connect-src *;">
+    content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; form-action 'none'; base-uri 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spoty</title>
   <link rel="stylesheet" href="styles.css">
@@ -132,6 +139,14 @@
             <span data-i18n="settings_ai">AI Mód</span>
             <kbd class="tab-kbd">4</kbd>
           </button>
+          <button class="settings-tab" data-tab="privacy">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span data-i18n="settings_privacy_tab">Adatvédelem</span>
+            <kbd class="tab-kbd">5</kbd>
+          </button>
           <button class="settings-tab" data-tab="aliases">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -139,7 +154,7 @@
               <line x1="12" y1="19" x2="20" y2="19"></line>
             </svg>
             <span data-i18n="settings_aliases_tab">Aliasok</span>
-            <kbd class="tab-kbd">5</kbd>
+            <kbd class="tab-kbd">6</kbd>
           </button>
         </nav>
         <div class="settings-panels">
@@ -191,6 +206,16 @@
                 <input type="checkbox" id="set-enable-web" class="toggle-switch">
               </label>
               <label class="setting-row">
+                <span data-i18n="settings_search_engine">Keresőmotor</span>
+                <select id="set-search-engine" class="select-input small" style="width: auto;">
+                  <option value="duckduckgo">DuckDuckGo</option>
+                  <option value="startpage">Startpage</option>
+                  <option value="brave">Brave Search</option>
+                  <option value="ecosia">Ecosia</option>
+                  <option value="google">Google</option>
+                </select>
+              </label>
+              <label class="setting-row">
                 <span data-i18n="settings_max">Max találatok száma</span>
                 <input type="number" id="set-max-results" min="1" max="20" value="8" class="text-input small">
               </label>
@@ -231,13 +256,23 @@
                 </select>
               </label>
 
+              <p class="setting-hint" data-i18n="settings_ai_cloud_hint">
+                Az OpenAI és a Gemini felhős szolgáltatás: amit ide beírsz, elhagyja a gépet.
+                Az Ollama helyben fut, semmit nem küld el.
+              </p>
+
               <!-- OpenAI Settings -->
               <div id="openai-settings-block">
                 <label class="setting-row vertical">
                   <span data-i18n="settings_openai_key">OpenAI API Kulcs</span>
                   <input type="password" id="set-openai-api-key" placeholder="sk-..." class="text-input"
-                    spellcheck="false">
+                    spellcheck="false" autocomplete="off">
                 </label>
+                <div class="setting-row">
+                  <span class="setting-hint" id="openai-key-state"></span>
+                  <button type="button" id="btn-clear-openai-key" class="ai-history-btn danger"
+                    data-i18n="settings_key_clear">Mentett kulcs törlése</button>
+                </div>
                 <label class="setting-row">
                   <span data-i18n="settings_model">Modell</span>
                   <select id="set-openai-model" class="select-input">
@@ -254,8 +289,13 @@
                 <label class="setting-row vertical">
                   <span data-i18n="settings_gemini_key">Gemini API Kulcs</span>
                   <input type="password" id="set-gemini-api-key" placeholder="AIzaSy..." class="text-input"
-                    spellcheck="false">
+                    spellcheck="false" autocomplete="off">
                 </label>
+                <div class="setting-row">
+                  <span class="setting-hint" id="gemini-key-state"></span>
+                  <button type="button" id="btn-clear-gemini-key" class="ai-history-btn danger"
+                    data-i18n="settings_key_clear">Mentett kulcs törlése</button>
+                </div>
                 <label class="setting-row">
                   <span data-i18n="settings_model">Modell</span>
                   <select id="set-gemini-model" class="select-input">
@@ -289,6 +329,41 @@
             </div>
           </div>
 
+          <!-- Privacy Panel -->
+          <div class="settings-panel" data-panel="privacy">
+            <div class="setting-group">
+              <p class="setting-hint" data-i18n="settings_privacy_hint">
+                Spoty nem gyűjt telemetriát. Hálózatra csak az alábbi funkciók lépnek.
+              </p>
+              <label class="setting-row">
+                <span data-i18n="settings_offline">Offline mód (minden hálózati kérés tiltása)</span>
+                <input type="checkbox" id="set-offline-mode" class="toggle-switch">
+              </label>
+              <label class="setting-row">
+                <span data-i18n="settings_weather_net">Időjárás (wttr.in)</span>
+                <input type="checkbox" id="set-enable-weather" class="toggle-switch">
+              </label>
+              <label class="setting-row">
+                <span data-i18n="settings_currency_net">Valutaváltó (open.er-api.com)</span>
+                <input type="checkbox" id="set-enable-currency" class="toggle-switch">
+              </label>
+              <label class="setting-row">
+                <span data-i18n="settings_clip_sensitive">Jelszókezelőből másolt tartalom kihagyása</span>
+                <input type="checkbox" id="set-clip-sensitive" class="toggle-switch">
+              </label>
+              <label class="setting-row">
+                <span data-i18n="settings_clip_retention">Vágólap előzmények megőrzése (perc)</span>
+                <input type="number" id="set-clip-retention" min="1" max="1440" value="60"
+                  class="text-input small">
+              </label>
+              <div class="setting-row">
+                <span class="setting-hint" id="secrets-state"></span>
+                <button type="button" id="btn-clear-clipboard" class="ai-history-btn"
+                  data-i18n="settings_clip_clear">Vágólap előzmények törlése</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Aliases Panel -->
           <div class="settings-panel" data-panel="aliases">
             <div class="setting-group">
@@ -302,7 +377,7 @@
       </div>
       <div class="settings-footer">
         <div class="settings-footer-hints">
-          <span class="footer-hint"><kbd>1</kbd>–<kbd>5</kbd> <span data-i18n="settings_nav_tabs">Váltás</span></span>
+          <span class="footer-hint"><kbd>1</kbd>–<kbd>6</kbd> <span data-i18n="settings_nav_tabs">Váltás</span></span>
           <span class="footer-hint"><kbd>Tab</kbd> <span data-i18n="footer_nav">Navigáció</span></span>
           <span class="footer-hint"><kbd>Esc</kbd> <span data-i18n="footer_close">Bezárás</span></span>
         </div>
@@ -312,8 +387,6 @@
 
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.1/dist/purify.min.js"></script>
   <script src="../dist/renderer/index.js"></script>
 </body>
 
